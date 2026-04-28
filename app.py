@@ -6,6 +6,11 @@ import os
 app = Flask(__name__)
 
 LEARNING_FILE = 'learned_pairs.json'
+TRIGRAM_FILE = 'learned_trigrams.json'
+
+# ============================================
+# LOAD EXISTING LEARNING DATA
+# ============================================
 
 if os.path.exists(LEARNING_FILE):
     with open(LEARNING_FILE, 'r', encoding='utf-8') as f:
@@ -17,339 +22,558 @@ if os.path.exists(LEARNING_FILE):
 else:
     bigrams = defaultdict(lambda: defaultdict(int))
 
+if os.path.exists(TRIGRAM_FILE):
+    with open(TRIGRAM_FILE, 'r', encoding='utf-8') as f:
+        trigram_data = json.load(f)
+    trigrams = defaultdict(lambda: defaultdict(int))
+    for two_words, suggestions in trigram_data.items():
+        for sugg, count in suggestions.items():
+            trigrams[two_words][sugg] = count
+else:
+    trigrams = defaultdict(lambda: defaultdict(int))
+
 # ============================================
-# MEGA DATASET (2000+ COMMON WORDS)
+# BIGRAM DATA (MAXIMUM - 5000+ PAIRS)
 # ============================================
 
-pretrained = {
-    # ===== PRONOUNS (All forms) =====
-    'i': {'am': 500, 'have': 490, 'will': 480, 'can': 470, 'love': 460, 'like': 450, 'want': 440, 'need': 430, 'did': 420, 'would': 410, 'could': 400, 'should': 390, 'might': 380, 'must': 370, 'do': 360, 'dont': 350},
-    'you': {'are': 500, 'have': 490, 'will': 480, 'can': 470, 'need': 460, 'want': 450, 'like': 440, 'did': 430, 'would': 420, 'could': 410, 'should': 400, 'do': 390, 'dont': 380},
-    'he': {'is': 500, 'has': 490, 'was': 480, 'does': 470, 'will': 460, 'can': 450, 'would': 440, 'could': 430, 'should': 420, 'did': 410},
-    'she': {'is': 500, 'has': 490, 'was': 480, 'does': 470, 'will': 460, 'can': 450, 'would': 440, 'could': 430, 'should': 420},
-    'it': {'is': 500, 'has': 490, 'was': 480, 'looks': 470, 'seems': 460, 'works': 450, 'does': 440, 'will': 430, 'can': 420},
-    'we': {'are': 500, 'have': 490, 'will': 480, 'can': 470, 'should': 460, 'must': 450, 'would': 440, 'could': 430, 'need': 420},
-    'they': {'are': 500, 'have': 490, 'will': 480, 'can': 470, 'should': 460, 'must': 450, 'would': 440, 'could': 430, 'need': 420},
-    'my': {'name': 500, 'friend': 490, 'car': 480, 'house': 470, 'life': 460, 'love': 450, 'heart': 440, 'mind': 430, 'family': 420},
-    'your': {'name': 500, 'friend': 490, 'car': 480, 'house': 470, 'life': 460, 'love': 450, 'help': 440, 'support': 430},
-    'his': {'name': 500, 'friend': 490, 'car': 480, 'house': 470, 'life': 460, 'work': 450, 'family': 440},
-    'her': {'name': 500, 'friend': 490, 'car': 480, 'house': 470, 'life': 460, 'smile': 450, 'eyes': 440},
-    'our': {'home': 500, 'life': 490, 'family': 480, 'country': 470, 'world': 460, 'future': 450, 'children': 440},
-    'their': {'home': 500, 'life': 490, 'family': 480, 'country': 470, 'children': 460, 'future': 450},
-    'me': {'too': 500, 'please': 490, 'now': 480, 'later': 470, 'either': 460, 'neither': 450, 'also': 440},
-    'him': {'too': 500, 'please': 490, 'now': 480, 'later': 470, 'either': 460, 'also': 450},
-    'her': {'too': 500, 'please': 490, 'now': 480, 'later': 470, 'either': 460, 'also': 450},
-    'us': {'too': 500, 'please': 490, 'now': 480, 'later': 470, 'all': 460, 'both': 450},
-    'them': {'too': 500, 'please': 490, 'now': 480, 'later': 470, 'all': 460, 'both': 450},
+bigram_pretrained = {
+    # PRONOUNS (All forms)
+    'i': {'am': 500, 'have': 495, 'will': 490, 'can': 485, 'love': 480, 'like': 475, 'want': 470, 'need': 465, 'did': 460, 'would': 455, 'could': 450, 'should': 445, 'might': 440, 'must': 435, 'do': 430, 'dont': 425, 'never': 420, 'always': 415},
+    'you': {'are': 500, 'have': 495, 'will': 490, 'can': 485, 'need': 480, 'want': 475, 'like': 470, 'did': 465, 'would': 460, 'could': 455, 'should': 450, 'do': 445, 'dont': 440, 'never': 435},
+    'he': {'is': 500, 'has': 495, 'was': 490, 'does': 485, 'will': 480, 'can': 475, 'would': 470, 'could': 465, 'should': 460, 'did': 455, 'never': 450},
+    'she': {'is': 500, 'has': 495, 'was': 490, 'does': 485, 'will': 480, 'can': 475, 'would': 470, 'could': 465, 'should': 460, 'did': 455},
+    'it': {'is': 500, 'has': 495, 'was': 490, 'looks': 485, 'seems': 480, 'works': 475, 'does': 470, 'will': 465, 'can': 460, 'takes': 455},
+    'we': {'are': 500, 'have': 495, 'will': 490, 'can': 485, 'should': 480, 'must': 475, 'would': 470, 'could': 465, 'need': 460, 'did': 455},
+    'they': {'are': 500, 'have': 495, 'will': 490, 'can': 485, 'should': 480, 'must': 475, 'would': 470, 'could': 465, 'need': 460, 'did': 455},
+    'my': {'name': 500, 'friend': 495, 'car': 490, 'house': 485, 'life': 480, 'love': 475, 'heart': 470, 'mind': 465, 'family': 460, 'mother': 455, 'father': 450},
+    'your': {'name': 500, 'friend': 495, 'car': 490, 'house': 485, 'life': 480, 'love': 475, 'help': 470, 'support': 465, 'family': 460, 'mother': 455},
+    'his': {'name': 500, 'friend': 495, 'car': 490, 'house': 485, 'life': 480, 'work': 475, 'family': 470, 'mother': 465, 'father': 460},
+    'her': {'name': 500, 'friend': 495, 'car': 490, 'house': 485, 'life': 480, 'smile': 475, 'eyes': 470, 'family': 465, 'mother': 460},
+    'our': {'home': 500, 'life': 495, 'family': 490, 'country': 485, 'world': 480, 'future': 475, 'children': 470, 'parents': 465, 'house': 460},
+    'their': {'home': 500, 'life': 495, 'family': 490, 'country': 485, 'children': 480, 'future': 475, 'house': 470, 'car': 465},
+    'me': {'too': 500, 'please': 495, 'now': 490, 'later': 485, 'either': 480, 'neither': 475, 'also': 470, 'either': 465},
+    'us': {'too': 500, 'please': 495, 'now': 490, 'later': 485, 'all': 480, 'both': 475, 'also': 470},
+    'them': {'too': 500, 'please': 495, 'now': 490, 'later': 485, 'all': 480, 'both': 475},
     
-    # ===== VERBS (All tenses) =====
-    'am': {'going': 500, 'doing': 490, 'trying': 480, 'here': 470, 'not': 460, 'very': 450, 'so': 440, 'just': 430, 'still': 420, 'always': 410},
-    'is': {'a': 500, 'the': 490, 'going': 480, 'very': 470, 'not': 460, 'my': 450, 'your': 440, 'his': 430, 'her': 420, 'it': 410, 'this': 400},
-    'are': {'you': 500, 'we': 490, 'they': 480, 'going': 470, 'not': 460, 'the': 450, 'a': 440, 'there': 430, 'here': 420, 'so': 410},
-    'was': {'a': 500, 'the': 490, 'very': 480, 'going': 470, 'not': 460, 'my': 450, 'his': 440, 'her': 430, 'so': 420, 'just': 410},
-    'were': {'you': 500, 'they': 490, 'we': 480, 'not': 470, 'very': 460, 'so': 450, 'there': 440, 'here': 430, 'all': 420},
-    'be': {'a': 500, 'the': 490, 'very': 480, 'good': 470, 'nice': 460, 'happy': 450, 'sad': 440, 'there': 430},
-    'been': {'a': 500, 'the': 490, 'very': 480, 'so': 470, 'too': 460, 'there': 450, 'here': 440},
-    'have': {'a': 500, 'to': 490, 'been': 480, 'got': 470, 'you': 460, 'it': 450, 'this': 440, 'no': 430, 'many': 420},
-    'has': {'a': 500, 'been': 490, 'to': 480, 'got': 470, 'it': 460, 'this': 450, 'no': 440, 'many': 430},
-    'had': {'a': 500, 'been': 490, 'to': 480, 'got': 470, 'no': 460, 'it': 450, 'this': 440},
-    'do': {'you': 500, 'it': 490, 'not': 480, 'this': 470, 'your': 460, 'my': 450, 'we': 440, 'they': 430, 'i': 420},
-    'does': {'it': 500, 'this': 490, 'not': 480, 'he': 470, 'she': 460, 'anyone': 450, 'everyone': 440},
-    'did': {'you': 500, 'it': 490, 'this': 480, 'he': 470, 'she': 460, 'not': 450, 'we': 440, 'they': 430, 'i': 420},
-    'can': {'you': 500, 'i': 490, 'we': 480, 'they': 470, 'he': 460, 'she': 450, 'be': 440, 'do': 430, 'get': 420, 'see': 410},
-    'could': {'be': 500, 'you': 490, 'i': 480, 'we': 470, 'they': 460, 'have': 450, 'get': 440, 'do': 430},
-    'would': {'be': 500, 'you': 490, 'i': 480, 'like': 470, 'love': 460, 'want': 450, 'have': 440, 'do': 430},
-    'should': {'be': 500, 'you': 490, 'we': 480, 'they': 470, 'have': 460, 'go': 450, 'do': 440, 'get': 430},
-    'might': {'be': 500, 'have': 490, 'need': 480, 'want': 470, 'go': 460, 'come': 450},
-    'must': {'be': 500, 'have': 490, 'go': 480, 'do': 470, 'get': 460, 'see': 450},
-    'will': {'be': 500, 'go': 490, 'come': 480, 'see': 470, 'get': 460, 'have': 450, 'do': 440, 'make': 430, 'take': 420},
-    'go': {'to': 500, 'home': 490, 'out': 480, 'in': 470, 'there': 460, 'now': 450, 'away': 440, 'back': 430},
-    'come': {'here': 500, 'home': 490, 'back': 480, 'in': 470, 'to': 460, 'over': 450, 'out': 440},
-    'see': {'you': 500, 'it': 490, 'him': 480, 'her': 470, 'them': 460, 'me': 450, 'us': 440, 'the': 430},
-    'get': {'it': 500, 'out': 490, 'in': 480, 'up': 470, 'down': 460, 'there': 450, 'home': 440, 'back': 430},
-    'make': {'it': 500, 'sure': 490, 'money': 480, 'love': 470, 'mistake': 460, 'sense': 450, 'time': 440},
-    'take': {'it': 500, 'care': 490, 'time': 480, 'out': 470, 'in': 460, 'a': 450, 'the': 440},
-    'give': {'me': 500, 'it': 490, 'you': 480, 'him': 470, 'her': 460, 'us': 450, 'them': 440, 'up': 430},
-    'put': {'it': 500, 'on': 490, 'in': 480, 'out': 470, 'down': 460, 'up': 450, 'there': 440},
-    'keep': {'it': 500, 'going': 490, 'up': 480, 'safe': 470, 'quiet': 460, 'calm': 450, 'trying': 440},
+    # VERBS (All tenses - Maximum)
+    'am': {'a': 500, 'going': 495, 'doing': 490, 'trying': 485, 'here': 480, 'not': 475, 'very': 470, 'so': 465, 'just': 460, 'still': 455, 'always': 450},
+    'is': {'a': 500, 'the': 495, 'going': 490, 'very': 485, 'not': 480, 'my': 475, 'your': 470, 'his': 465, 'her': 460, 'it': 455, 'this': 450, 'that': 445},
+    'are': {'you': 500, 'we': 495, 'they': 490, 'going': 485, 'not': 480, 'the': 475, 'a': 470, 'there': 465, 'here': 460, 'so': 455, 'very': 450},
+    'was': {'a': 500, 'the': 495, 'very': 490, 'going': 485, 'not': 480, 'my': 475, 'his': 470, 'her': 465, 'so': 460, 'just': 455, 'really': 450},
+    'were': {'you': 500, 'they': 495, 'we': 490, 'not': 485, 'very': 480, 'so': 475, 'there': 470, 'here': 465, 'all': 460, 'really': 455},
+    'be': {'a': 500, 'the': 495, 'very': 490, 'good': 485, 'nice': 480, 'happy': 475, 'sad': 470, 'there': 465, 'here': 460, 'careful': 455},
+    'been': {'a': 500, 'the': 495, 'very': 490, 'so': 485, 'too': 480, 'there': 475, 'here': 470, 'long': 465, 'away': 460},
+    'being': {'a': 500, 'very': 495, 'so': 490, 'too': 485, 'good': 480, 'nice': 475, 'happy': 470},
+    'have': {'a': 500, 'to': 495, 'been': 490, 'got': 485, 'you': 480, 'it': 475, 'this': 470, 'no': 465, 'many': 460, 'some': 455, 'never': 450},
+    'has': {'a': 500, 'been': 495, 'to': 490, 'got': 485, 'it': 480, 'this': 475, 'no': 470, 'many': 465, 'always': 460, 'never': 455},
+    'had': {'a': 500, 'been': 495, 'to': 490, 'got': 485, 'no': 480, 'it': 475, 'this': 470, 'never': 465, 'always': 460},
+    'do': {'you': 500, 'it': 495, 'not': 490, 'this': 485, 'your': 480, 'my': 475, 'we': 470, 'they': 465, 'i': 460, 'something': 455},
+    'does': {'it': 500, 'this': 495, 'not': 490, 'he': 485, 'she': 480, 'anyone': 475, 'everyone': 470, 'anybody': 465},
+    'did': {'you': 500, 'it': 495, 'this': 490, 'he': 485, 'she': 480, 'not': 475, 'we': 470, 'they': 465, 'i': 460, 'everything': 455},
+    'can': {'you': 500, 'i': 495, 'we': 490, 'they': 485, 'he': 480, 'she': 475, 'be': 470, 'do': 465, 'get': 460, 'see': 455, 'help': 450, 'go': 445},
+    'could': {'be': 500, 'you': 495, 'i': 490, 'we': 485, 'they': 480, 'have': 475, 'get': 470, 'do': 465, 'see': 460, 'help': 455},
+    'would': {'be': 500, 'you': 495, 'i': 490, 'like': 485, 'love': 480, 'want': 475, 'have': 470, 'do': 465, 'go': 460, 'see': 455, 'help': 450},
+    'should': {'be': 500, 'you': 495, 'we': 490, 'they': 485, 'have': 480, 'go': 475, 'do': 470, 'get': 465, 'see': 460, 'take': 455},
+    'might': {'be': 500, 'have': 495, 'need': 490, 'want': 485, 'go': 480, 'come': 475, 'see': 470, 'get': 465},
+    'must': {'be': 500, 'have': 495, 'go': 490, 'do': 485, 'get': 480, 'see': 475, 'remember': 470},
+    'will': {'be': 500, 'go': 495, 'come': 490, 'see': 485, 'get': 480, 'have': 475, 'do': 470, 'make': 465, 'take': 460, 'need': 455, 'want': 450},
+    'would': {'like': 500, 'love': 495, 'want': 490, 'be': 485, 'go': 480, 'come': 475, 'see': 470},
+    'going': {'to': 500, 'be': 495, 'home': 490, 'out': 485, 'in': 480, 'there': 475, 'now': 470},
+    'go': {'to': 500, 'home': 495, 'out': 490, 'in': 485, 'there': 480, 'now': 475, 'away': 470, 'back': 465, 'together': 460},
+    'come': {'here': 500, 'home': 495, 'back': 490, 'in': 485, 'to': 480, 'over': 475, 'out': 470, 'with': 465},
+    'see': {'you': 500, 'it': 495, 'him': 490, 'her': 485, 'them': 480, 'me': 475, 'us': 470, 'the': 465, 'that': 460},
+    'get': {'it': 500, 'out': 495, 'in': 490, 'up': 485, 'down': 480, 'there': 475, 'home': 470, 'back': 465, 'ready': 460, 'better': 455},
+    'make': {'it': 500, 'sure': 495, 'money': 490, 'love': 485, 'mistake': 480, 'sense': 475, 'time': 470, 'decision': 465, 'difference': 460},
+    'take': {'it': 500, 'care': 495, 'time': 490, 'out': 485, 'in': 480, 'a': 475, 'the': 470, 'your': 465, 'my': 460},
+    'give': {'me': 500, 'it': 495, 'you': 490, 'him': 485, 'her': 480, 'us': 475, 'them': 470, 'up': 465, 'back': 460},
+    'put': {'it': 500, 'on': 495, 'in': 490, 'out': 485, 'down': 480, 'up': 475, 'there': 470, 'together': 465},
+    'keep': {'it': 500, 'going': 495, 'up': 490, 'safe': 485, 'quiet': 480, 'calm': 475, 'trying': 470, 'working': 465},
+    'find': {'it': 500, 'out': 495, 'a': 490, 'the': 485, 'yourself': 480, 'way': 475, 'time': 470},
+    'start': {'to': 500, 'a': 495, 'the': 490, 'your': 485, 'now': 480, 'today': 475},
+    'stop': {'it': 500, 'the': 495, 'a': 490, 'your': 485, 'now': 480, 'here': 475},
     
-    # ===== EVERY, SOME, ANY, NO, ALL, MANY, MUCH, MORE, MOST, LEAST =====
-    'every': {'day': 500, 'night': 490, 'time': 480, 'one': 470, 'person': 460, 'morning': 450, 'week': 440, 'month': 430, 'year': 420},
-    'everyone': {'is': 500, 'has': 490, 'knows': 480, 'loves': 470, 'needs': 460, 'wants': 450, 'likes': 440, 'agrees': 430},
-    'everything': {'is': 500, 'was': 490, 'has': 480, 'looks': 470, 'seems': 460, 'okay': 450, 'fine': 440, 'perfect': 430},
-    'everywhere': {'is': 500, 'was': 490, 'looks': 480, 'goes': 470, 'feels': 460, 'seems': 450},
-    'everybody': {'is': 500, 'has': 490, 'knows': 480, 'loves': 470, 'needs': 460, 'wants': 450},
-    'some': {'one': 500, 'people': 490, 'time': 480, 'day': 470, 'thing': 460, 'where': 450, 'money': 440, 'help': 430},
-    'someone': {'is': 500, 'has': 490, 'knows': 480, 'loves': 470, 'called': 460, 'said': 450, 'told': 440},
-    'something': {'is': 500, 'was': 490, 'has': 480, 'looks': 470, 'happened': 460, 'changed': 450, 'wrong': 440},
-    'somewhere': {'is': 500, 'was': 490, 'over': 480, 'in': 470, 'out': 460, 'else': 450, 'near': 440},
-    'any': {'one': 500, 'time': 490, 'day': 480, 'person': 470, 'thing': 460, 'where': 450, 'help': 440, 'idea': 430},
-    'anyone': {'is': 500, 'has': 490, 'knows': 480, 'can': 470, 'will': 460, 'could': 450, 'should': 440},
-    'anything': {'is': 500, 'was': 490, 'can': 480, 'will': 470, 'possible': 460, 'else': 450, 'wrong': 440},
-    'anywhere': {'is': 500, 'was': 490, 'can': 480, 'will': 470, 'else': 460, 'near': 450},
-    'anybody': {'is': 500, 'has': 490, 'knows': 480, 'can': 470, 'will': 460},
-    'no': {'one': 500, 'time': 490, 'way': 480, 'problem': 470, 'idea': 460, 'where': 450, 'money': 440, 'help': 430},
-    'no one': {'is': 500, 'knows': 490, 'cares': 480, 'loves': 470, 'likes': 460, 'helps': 450},
-    'nothing': {'is': 500, 'was': 490, 'has': 480, 'matters': 470, 'changed': 460, 'else': 450, 'wrong': 440},
-    'nowhere': {'to': 500, 'in': 490, 'near': 480, 'else': 470, 'found': 460},
-    'nobody': {'is': 500, 'knows': 490, 'cares': 480, 'loves': 470, 'likes': 460},
-    'all': {'the': 500, 'my': 490, 'your': 480, 'his': 470, 'her': 460, 'of': 450, 'these': 440, 'those': 430},
-    'most': {'of': 500, 'the': 490, 'people': 480, 'important': 470, 'common': 460, 'popular': 450, 'likely': 440},
-    'many': {'people': 500, 'times': 490, 'years': 480, 'days': 470, 'things': 460, 'ways': 450, 'reasons': 440},
-    'much': {'more': 500, 'better': 490, 'less': 480, 'love': 470, 'time': 460, 'money': 450, 'help': 440},
-    'more': {'than': 500, 'people': 490, 'time': 480, 'money': 470, 'important': 460, 'common': 450, 'likely': 440},
-    'less': {'than': 500, 'more': 490, 'time': 480, 'money': 470, 'important': 460, 'common': 450},
-    'least': {'of': 500, 'the': 490, 'important': 480, 'common': 470, 'likely': 460},
+    # EVERY, SOME, ANY, NO, ALL, MANY, MUCH, MORE (Maximum)
+    'every': {'day': 500, 'night': 495, 'time': 490, 'one': 485, 'person': 480, 'morning': 475, 'week': 470, 'month': 465, 'year': 460, 'single': 455},
+    'everyone': {'is': 500, 'has': 495, 'knows': 490, 'loves': 485, 'needs': 480, 'wants': 475, 'likes': 470, 'agrees': 465, 'thinks': 460},
+    'everything': {'is': 500, 'was': 495, 'has': 490, 'looks': 485, 'seems': 480, 'okay': 475, 'fine': 470, 'perfect': 465, 'good': 460},
+    'everywhere': {'is': 500, 'was': 495, 'looks': 490, 'goes': 485, 'feels': 480, 'seems': 475, 'i': 470},
+    'everybody': {'is': 500, 'has': 495, 'knows': 490, 'loves': 485, 'needs': 480, 'wants': 475, 'likes': 470},
+    'some': {'one': 500, 'people': 495, 'time': 490, 'day': 485, 'thing': 480, 'where': 475, 'money': 470, 'help': 465, 'reason': 460, 'way': 455},
+    'someone': {'is': 500, 'has': 495, 'knows': 490, 'loves': 485, 'called': 480, 'said': 475, 'told': 470, 'asked': 465, 'helped': 460},
+    'something': {'is': 500, 'was': 495, 'has': 490, 'looks': 485, 'happened': 480, 'changed': 475, 'wrong': 470, 'else': 465, 'new': 460},
+    'somewhere': {'is': 500, 'was': 495, 'over': 490, 'in': 485, 'out': 480, 'else': 475, 'near': 470, 'far': 465},
+    'any': {'one': 500, 'time': 495, 'day': 490, 'person': 485, 'thing': 480, 'where': 475, 'help': 470, 'idea': 465, 'reason': 460, 'way': 455},
+    'anyone': {'is': 500, 'has': 495, 'knows': 490, 'can': 485, 'will': 480, 'could': 475, 'should': 470, 'would': 465},
+    'anything': {'is': 500, 'was': 495, 'can': 490, 'will': 485, 'possible': 480, 'else': 475, 'wrong': 470, 'new': 465, 'good': 460},
+    'anywhere': {'is': 500, 'was': 495, 'can': 490, 'will': 485, 'else': 480, 'near': 475, 'far': 470},
+    'anybody': {'is': 500, 'has': 495, 'knows': 490, 'can': 485, 'will': 480, 'could': 475},
+    'no': {'one': 500, 'time': 495, 'way': 490, 'problem': 485, 'idea': 480, 'where': 475, 'money': 470, 'help': 465, 'reason': 460, 'doubt': 455},
+    'no one': {'is': 500, 'knows': 495, 'cares': 490, 'loves': 485, 'likes': 480, 'helps': 475, 'understands': 470},
+    'nothing': {'is': 500, 'was': 495, 'has': 490, 'matters': 485, 'changed': 480, 'else': 475, 'wrong': 470, 'new': 465, 'works': 460},
+    'nowhere': {'to': 500, 'in': 495, 'near': 490, 'else': 485, 'found': 480, 'seen': 475},
+    'nobody': {'is': 500, 'knows': 495, 'cares': 490, 'loves': 485, 'likes': 480, 'helps': 475},
+    'all': {'the': 500, 'my': 495, 'your': 490, 'his': 485, 'her': 480, 'of': 475, 'these': 470, 'those': 465, 'our': 460, 'their': 455},
+    'most': {'of': 500, 'the': 495, 'people': 490, 'important': 485, 'common': 480, 'popular': 475, 'likely': 470, 'beautiful': 465},
+    'many': {'people': 500, 'times': 495, 'years': 490, 'days': 485, 'things': 480, 'ways': 475, 'reasons': 470, 'places': 465, 'problems': 460},
+    'much': {'more': 500, 'better': 495, 'less': 490, 'love': 485, 'time': 480, 'money': 475, 'help': 470, 'fun': 465, 'care': 460},
+    'more': {'than': 500, 'people': 495, 'time': 490, 'money': 485, 'important': 480, 'common': 475, 'likely': 470, 'beautiful': 465, 'fun': 460},
+    'less': {'than': 500, 'more': 495, 'time': 490, 'money': 485, 'important': 480, 'common': 475, 'likely': 470, 'fun': 465},
+    'least': {'of': 500, 'the': 495, 'important': 490, 'common': 485, 'likely': 480, 'popular': 475},
     
-    # ===== ADJECTIVES (Common) =====
-    'good': {'morning': 500, 'day': 490, 'luck': 480, 'job': 470, 'idea': 460, 'person': 450, 'time': 440, 'night': 430, 'friend': 420, 'work': 410},
-    'bad': {'day': 500, 'luck': 490, 'idea': 480, 'person': 470, 'situation': 460, 'weather': 450, 'habit': 440, 'news': 430, 'dream': 420},
-    'great': {'day': 500, 'job': 490, 'idea': 480, 'work': 470, 'person': 460, 'friend': 450, 'time': 440, 'success': 430, 'life': 420},
-    'nice': {'day': 500, 'person': 490, 'car': 480, 'house': 470, 'weather': 460, 'smile': 450, 'place': 440, 'view': 430},
-    'beautiful': {'day': 500, 'girl': 490, 'house': 480, 'car': 470, 'smile': 460, 'view': 450, 'place': 440, 'weather': 430, 'face': 420},
-    'pretty': {'good': 500, 'nice': 490, 'girl': 480, 'face': 470, 'dress': 460, 'house': 450, 'car': 440, 'well': 430},
-    'ugly': {'truth': 500, 'face': 490, 'situation': 480, 'reality': 470, 'building': 460, 'car': 450, 'person': 440},
-    'happy': {'birthday': 500, 'day': 490, 'life': 480, 'ending': 470, 'moment': 460, 'smile': 450, 'family': 440, 'face': 430},
-    'sad': {'day': 500, 'story': 490, 'ending': 480, 'news': 470, 'person': 460, 'face': 450, 'truth': 440, 'reality': 430},
-    'angry': {'at': 500, 'with': 490, 'about': 480, 'person': 470, 'voice': 460, 'face': 450, 'mob': 440},
-    'excited': {'about': 500, 'for': 490, 'to': 480, 'today': 470, 'tomorrow': 460, 'see': 450, 'meet': 440},
-    'scared': {'of': 500, 'about': 490, 'to': 480, 'death': 470, 'dark': 460, 'lonely': 450, 'alone': 440},
-    'tired': {'of': 500, 'from': 490, 'today': 480, 'very': 470, 'so': 460, 'too': 450, 'now': 440},
-    'big': {'house': 500, 'car': 490, 'problem': 480, 'success': 470, 'day': 460, 'fan': 450, 'deal': 440, 'man': 430, 'city': 420},
-    'small': {'house': 500, 'car': 490, 'problem': 480, 'thing': 470, 'cat': 460, 'dog': 450, 'town': 440, 'city': 430},
-    'large': {'house': 500, 'car': 490, 'problem': 480, 'company': 470, 'city': 460, 'number': 450, 'amount': 440},
-    'new': {'car': 500, 'house': 490, 'job': 480, 'phone': 470, 'friend': 460, 'day': 450, 'idea': 440, 'life': 430, 'year': 420},
-    'old': {'car': 500, 'house': 490, 'friend': 480, 'phone': 470, 'man': 460, 'woman': 450, 'days': 440, 'times': 430},
-    'young': {'man': 500, 'woman': 490, 'boy': 480, 'girl': 470, 'person': 460, 'age': 450, 'people': 440},
-    'rich': {'man': 500, 'person': 490, 'family': 480, 'country': 470, 'people': 460, 'life': 450},
-    'poor': {'man': 500, 'person': 490, 'family': 480, 'country': 470, 'people': 460, 'life': 450},
-    'strong': {'man': 500, 'person': 490, 'feeling': 480, 'will': 470, 'body': 460, 'sense': 450},
-    'weak': {'man': 500, 'person': 490, 'signal': 480, 'feeling': 470, 'health': 460, 'link': 450},
-    'fast': {'car': 500, 'food': 490, 'runner': 480, 'internet': 470, 'speed': 460, 'pace': 450, 'learning': 440},
-    'slow': {'car': 500, 'internet': 490, 'runner': 480, 'speed': 470, 'day': 460, 'process': 450, 'learning': 440},
-    'easy': {'to': 500, 'way': 490, 'task': 480, 'job': 470, 'work': 460, 'life': 450, 'answer': 440},
-    'hard': {'to': 500, 'work': 490, 'task': 480, 'job': 470, 'time': 460, 'life': 450, 'decision': 440},
-    'soft': {'and': 500, 'voice': 490, 'touch': 480, 'skin': 470, 'pillow': 460, 'drink': 450},
-    'dark': {'night': 500, 'room': 490, 'side': 480, 'sky': 470, 'cloud': 460, 'color': 450},
-    'light': {'and': 500, 'weight': 490, 'color': 480, 'blue': 470, 'green': 460, 'house': 450},
+    # ADJECTIVES (Maximum common adjectives)
+    'good': {'morning': 500, 'day': 495, 'luck': 490, 'job': 485, 'idea': 480, 'person': 475, 'time': 470, 'night': 465, 'friend': 460, 'work': 455, 'life': 450, 'news': 445},
+    'bad': {'day': 500, 'luck': 495, 'idea': 490, 'person': 485, 'situation': 480, 'weather': 475, 'habit': 470, 'news': 465, 'dream': 460, 'night': 455},
+    'great': {'day': 500, 'job': 495, 'idea': 490, 'work': 485, 'person': 480, 'friend': 475, 'time': 470, 'success': 465, 'life': 460, 'news': 455},
+    'nice': {'day': 500, 'person': 495, 'car': 490, 'house': 485, 'weather': 480, 'smile': 475, 'place': 470, 'view': 465, 'guy': 460},
+    'beautiful': {'day': 500, 'girl': 495, 'house': 490, 'car': 485, 'smile': 480, 'view': 475, 'place': 470, 'weather': 465, 'face': 460, 'eyes': 455},
+    'pretty': {'good': 500, 'nice': 495, 'girl': 490, 'face': 485, 'dress': 480, 'house': 475, 'car': 470, 'well': 465, 'much': 460},
+    'ugly': {'truth': 500, 'face': 495, 'situation': 490, 'reality': 485, 'building': 480, 'car': 475, 'person': 470, 'duckling': 465},
+    'happy': {'birthday': 500, 'day': 495, 'life': 490, 'ending': 485, 'moment': 480, 'smile': 475, 'family': 470, 'face': 465, 'childhood': 460},
+    'sad': {'day': 500, 'story': 495, 'ending': 490, 'news': 485, 'person': 480, 'face': 475, 'truth': 470, 'reality': 465, 'song': 460},
+    'angry': {'at': 500, 'with': 495, 'about': 490, 'person': 485, 'voice': 480, 'face': 475, 'mob': 470, 'crowd': 465},
+    'excited': {'about': 500, 'for': 495, 'to': 490, 'today': 485, 'tomorrow': 480, 'see': 475, 'meet': 470, 'go': 465},
+    'scared': {'of': 500, 'about': 495, 'to': 490, 'death': 485, 'dark': 480, 'lonely': 475, 'alone': 470, 'scary': 465},
+    'tired': {'of': 500, 'from': 495, 'today': 490, 'very': 485, 'so': 480, 'too': 475, 'now': 470, 'always': 465},
+    'big': {'house': 500, 'car': 495, 'problem': 490, 'success': 485, 'day': 480, 'fan': 475, 'deal': 470, 'man': 465, 'city': 460, 'surprise': 455},
+    'small': {'house': 500, 'car': 495, 'problem': 490, 'thing': 485, 'cat': 480, 'dog': 475, 'town': 470, 'city': 465, 'difference': 460, 'change': 455},
+    'large': {'house': 500, 'car': 495, 'problem': 490, 'company': 485, 'city': 480, 'number': 475, 'amount': 470, 'group': 465},
+    'huge': {'house': 500, 'car': 495, 'problem': 490, 'success': 485, 'fan': 480, 'deal': 475, 'difference': 470},
+    'tiny': {'house': 500, 'car': 495, 'problem': 490, 'thing': 485, 'cat': 480, 'dog': 475, 'town': 470},
+    'new': {'car': 500, 'house': 495, 'job': 490, 'phone': 485, 'friend': 480, 'day': 475, 'idea': 470, 'life': 465, 'year': 460, 'beginning': 455},
+    'old': {'car': 500, 'house': 495, 'friend': 490, 'phone': 485, 'man': 480, 'woman': 475, 'days': 470, 'times': 465, 'school': 460, 'building': 455},
+    'young': {'man': 500, 'woman': 495, 'boy': 490, 'girl': 485, 'person': 480, 'age': 475, 'people': 470, 'generation': 465},
+    'rich': {'man': 500, 'person': 495, 'family': 490, 'country': 485, 'people': 480, 'life': 475, 'history': 470, 'culture': 465},
+    'poor': {'man': 500, 'person': 495, 'family': 490, 'country': 485, 'people': 480, 'life': 475, 'health': 470, 'quality': 465},
+    'strong': {'man': 500, 'person': 495, 'feeling': 490, 'will': 485, 'body': 480, 'sense': 475, 'relationship': 470},
+    'weak': {'man': 500, 'person': 495, 'signal': 490, 'feeling': 485, 'health': 480, 'link': 475, 'connection': 470},
+    'fast': {'car': 500, 'food': 495, 'runner': 490, 'internet': 485, 'speed': 480, 'pace': 475, 'learning': 470, 'worker': 465},
+    'slow': {'car': 500, 'internet': 495, 'runner': 490, 'speed': 485, 'day': 480, 'process': 475, 'learning': 470, 'worker': 465},
+    'easy': {'to': 500, 'way': 495, 'task': 490, 'job': 485, 'work': 480, 'life': 475, 'answer': 470, 'question': 465},
+    'hard': {'to': 500, 'work': 495, 'task': 490, 'job': 485, 'time': 480, 'life': 475, 'decision': 470, 'question': 465},
+    'soft': {'and': 500, 'voice': 495, 'touch': 490, 'skin': 485, 'pillow': 480, 'drink': 475, 'music': 470},
+    'dark': {'night': 500, 'room': 495, 'side': 490, 'sky': 485, 'cloud': 480, 'color': 475, 'blue': 470, 'brown': 465},
+    'light': {'and': 500, 'weight': 495, 'color': 490, 'blue': 485, 'green': 480, 'house': 475, 'room': 470, 'skin': 465},
+    'bright': {'light': 500, 'sun': 495, 'future': 490, 'smile': 485, 'color': 480, 'day': 475, 'morning': 470},
+    'clear': {'sky': 500, 'water': 495, 'mind': 490, 'understanding': 485, 'explanation': 480, 'view': 475},
+    'simple': {'way': 500, 'answer': 495, 'solution': 490, 'life': 485, 'truth': 480, 'fact': 475},
+    'complex': {'problem': 500, 'situation': 495, 'system': 490, 'relationship': 485, 'issue': 480},
     
-    # ===== GREETINGS & POLITE =====
-    'hello': {'world': 500, 'everyone': 490, 'friends': 480, 'dear': 470, 'sir': 460, 'there': 450, 'how': 440, 'my': 430},
-    'hi': {'there': 500, 'everyone': 490, 'friends': 480, 'how': 470, 'hello': 460, 'my': 450},
-    'hey': {'there': 500, 'everyone': 490, 'how': 480, 'whats': 470, 'hi': 460, 'you': 450},
-    'goodbye': {'everyone': 500, 'friends': 490, 'dear': 480, 'sir': 470, 'now': 460, 'for': 450},
-    'bye': {'everyone': 500, 'friends': 490, 'dear': 480, 'now': 470, 'see': 460, 'for': 450},
-    'thank': {'you': 500, 'god': 490, 'sir': 480, 'everyone': 470, 'all': 460, 'so': 450, 'very': 440},
-    'thanks': {'you': 500, 'god': 490, 'sir': 480, 'everyone': 470, 'for': 460, 'so': 450},
-    'please': {'help': 500, 'tell': 490, 'come': 480, 'go': 470, 'wait': 460, 'sit': 450, 'stand': 440, 'be': 430},
-    'sorry': {'for': 500, 'about': 490, 'dear': 480, 'everyone': 470, 'sir': 460, 'to': 450, 'i': 440},
-    'excuse': {'me': 500, 'us': 490, 'them': 480, 'him': 470, 'her': 460, 'sir': 450},
-    'welcome': {'to': 500, 'home': 490, 'our': 480, 'my': 470, 'the': 460, 'everyone': 450},
+    # GREETINGS & POLITE (Maximum)
+    'hello': {'world': 500, 'everyone': 495, 'friends': 490, 'dear': 485, 'sir': 480, 'there': 475, 'how': 470, 'my': 465, 'good': 460},
+    'hi': {'there': 500, 'everyone': 495, 'friends': 490, 'how': 485, 'hello': 480, 'my': 475, 'good': 470},
+    'hey': {'there': 500, 'everyone': 495, 'how': 490, 'whats': 485, 'hi': 480, 'you': 475, 'guys': 470},
+    'goodbye': {'everyone': 500, 'friends': 495, 'dear': 490, 'sir': 485, 'now': 480, 'for': 475, 'my': 470},
+    'bye': {'everyone': 500, 'friends': 495, 'dear': 490, 'now': 485, 'see': 480, 'for': 475, 'guys': 470},
+    'thank': {'you': 500, 'god': 495, 'sir': 490, 'everyone': 485, 'all': 480, 'so': 475, 'very': 470, 'much': 465, 'for': 460},
+    'thanks': {'you': 500, 'god': 495, 'sir': 490, 'everyone': 485, 'for': 480, 'so': 475, 'very': 470, 'much': 465},
+    'please': {'help': 500, 'tell': 495, 'come': 490, 'go': 485, 'wait': 480, 'sit': 475, 'stand': 470, 'be': 465, 'do': 460, 'stay': 455},
+    'sorry': {'for': 500, 'about': 495, 'dear': 490, 'everyone': 485, 'sir': 480, 'to': 475, 'i': 470, 'my': 465, 'the': 460},
+    'excuse': {'me': 500, 'us': 495, 'them': 490, 'him': 485, 'her': 480, 'sir': 475, 'maam': 470},
+    'welcome': {'to': 500, 'home': 495, 'our': 490, 'my': 485, 'the': 480, 'everyone': 475, 'back': 470},
     
-    # ===== QUESTION WORDS =====
-    'what': {'is': 500, 'are': 490, 'was': 480, 'do': 470, 'does': 460, 'about': 450, 'happened': 440, 'did': 430, 'can': 420},
-    'where': {'is': 500, 'are': 490, 'was': 480, 'do': 470, 'did': 460, 'have': 450, 'can': 440, 'should': 430},
-    'when': {'is': 500, 'are': 490, 'will': 480, 'did': 470, 'was': 460, 'does': 450, 'can': 440},
-    'why': {'is': 500, 'are': 490, 'do': 480, 'did': 470, 'would': 460, 'not': 450, 'should': 440},
-    'how': {'are': 500, 'is': 490, 'to': 480, 'do': 470, 'about': 460, 'many': 450, 'much': 440, 'long': 430, 'often': 420},
-    'who': {'is': 500, 'are': 490, 'was': 480, 'did': 470, 'will': 460, 'can': 450, 'should': 440},
-    'which': {'one': 500, 'is': 490, 'are': 480, 'way': 470, 'time': 460, 'place': 450, 'of': 440},
-    'whom': {'are': 500, 'is': 490, 'was': 480, 'did': 470, 'will': 460},
-    'whose': {'is': 500, 'are': 490, 'was': 480, 'this': 470, 'that': 460},
+    # QUESTION WORDS (Maximum)
+    'what': {'is': 500, 'are': 495, 'was': 490, 'do': 485, 'does': 480, 'about': 475, 'happened': 470, 'did': 465, 'can': 460, 'will': 455, 'would': 450},
+    'where': {'is': 500, 'are': 495, 'was': 490, 'do': 485, 'did': 480, 'have': 475, 'can': 470, 'should': 465, 'would': 460},
+    'when': {'is': 500, 'are': 495, 'will': 490, 'did': 485, 'was': 480, 'does': 475, 'can': 470, 'should': 465},
+    'why': {'is': 500, 'are': 495, 'do': 490, 'did': 485, 'would': 480, 'not': 475, 'should': 470, 'could': 465},
+    'how': {'are': 500, 'is': 495, 'to': 490, 'do': 485, 'about': 480, 'many': 475, 'much': 470, 'long': 465, 'often': 460, 'far': 455},
+    'who': {'is': 500, 'are': 495, 'was': 490, 'did': 485, 'will': 480, 'can': 475, 'should': 470, 'would': 465},
+    'which': {'one': 500, 'is': 495, 'are': 490, 'way': 485, 'time': 480, 'place': 475, 'of': 470, 'side': 465},
+    'whom': {'are': 500, 'is': 495, 'was': 490, 'did': 485, 'will': 480, 'should': 475},
+    'whose': {'is': 500, 'are': 495, 'was': 490, 'this': 485, 'that': 480, 'car': 475, 'house': 470},
     
-    # ===== TIME WORDS =====
-    'today': {'is': 500, 'was': 490, 'i': 480, 'we': 470, 'going': 460, 'will': 450, 'feels': 440, 'looks': 430},
-    'tomorrow': {'is': 500, 'will': 490, 'morning': 480, 'night': 470, 'i': 460, 'we': 450, 'be': 440, 'comes': 430},
-    'yesterday': {'was': 500, 'i': 490, 'we': 480, 'he': 470, 'she': 460, 'they': 450, 'went': 440, 'came': 430},
-    'now': {'i': 500, 'we': 490, 'is': 480, 'its': 470, 'go': 460, 'come': 450, 'time': 440, 'or': 430},
-    'later': {'i': 500, 'we': 490, 'will': 480, 'today': 470, 'then': 460, 'on': 450, 'bye': 440},
-    'soon': {'i': 500, 'we': 490, 'will': 480, 'be': 470, 'see': 460, 'come': 450, 'enough': 440},
-    'early': {'morning': 500, 'today': 490, 'tomorrow': 480, 'in': 470, 'this': 460, 'age': 450},
-    'late': {'night': 500, 'at': 490, 'for': 480, 'i': 470, 'we': 460, 'again': 450},
-    'morning': {'i': 500, 'we': 490, 'woke': 480, 'go': 470, 'work': 460, 'study': 450, 'run': 440, 'walk': 430},
-    'evening': {'i': 500, 'we': 490, 'came': 480, 'went': 470, 'home': 460, 'ate': 450, 'watched': 440},
-    'night': {'i': 500, 'we': 490, 'slept': 480, 'went': 470, 'came': 460, 'good': 450, 'late': 440, 'dark': 430},
-    'week': {'i': 500, 'we': 490, 'last': 480, 'next': 470, 'this': 460, 'every': 450, 'per': 440},
-    'month': {'i': 500, 'we': 490, 'last': 480, 'next': 470, 'this': 460, 'every': 450},
-    'year': {'i': 500, 'we': 490, 'last': 480, 'next': 470, 'this': 460, 'every': 450, 'new': 440},
-    'day': {'i': 500, 'we': 490, 'was': 480, 'is': 470, 'of': 460, 'by': 450, 'after': 440},
+       # TIME WORDS (Maximum)
+    'today': {'is': 500, 'was': 495, 'i': 490, 'we': 485, 'going': 480, 'will': 475, 'feels': 470, 'looks': 465, 'has': 460, 'i': 455},
+    'tomorrow': {'is': 500, 'will': 495, 'morning': 490, 'night': 485, 'i': 480, 'we': 475, 'be': 470, 'comes': 465, 'morning': 460},
+    'yesterday': {'was': 500, 'i': 495, 'we': 490, 'he': 485, 'she': 480, 'they': 475, 'went': 470, 'came': 465, 'saw': 460},
+    'now': {'i': 500, 'we': 495, 'is': 490, 'its': 485, 'go': 480, 'come': 475, 'time': 470, 'or': 465, 'then': 460},
+    'later': {'i': 500, 'we': 495, 'will': 490, 'today': 485, 'then': 480, 'on': 475, 'bye': 470, 'see': 465},
+    'soon': {'i': 500, 'we': 495, 'will': 490, 'be': 485, 'see': 480, 'come': 475, 'enough': 470, 'after': 465},
+    'early': {'morning': 500, 'today': 495, 'tomorrow': 490, 'in': 485, 'this': 480, 'age': 475, 'bird': 470},
+    'late': {'night': 500, 'at': 495, 'for': 490, 'i': 485, 'we': 480, 'again': 475, 'work': 470, 'sleep': 465},
+    'morning': {'i': 500, 'we': 495, 'woke': 490, 'go': 485, 'work': 480, 'study': 475, 'run': 470, 'walk': 465, 'coffee': 460},
+    'afternoon': {'i': 500, 'we': 495, 'went': 490, 'came': 485, 'worked': 480, 'studied': 475, 'ate': 470},
+    'evening': {'i': 500, 'we': 495, 'came': 490, 'went': 485, 'home': 480, 'ate': 475, 'watched': 470, 'relaxed': 465},
+    'night': {'i': 500, 'we': 495, 'slept': 490, 'went': 485, 'came': 480, 'good': 475, 'late': 470, 'dark': 465, 'stayed': 460},
+    'week': {'i': 500, 'we': 495, 'last': 490, 'next': 485, 'this': 480, 'every': 475, 'per': 470, 'long': 465},
+    'month': {'i': 500, 'we': 495, 'last': 490, 'next': 485, 'this': 480, 'every': 475, 'per': 470, 'long': 465},
+    'year': {'i': 500, 'we': 495, 'last': 490, 'next': 485, 'this': 480, 'every': 475, 'new': 470, 'per': 465, 'long': 460},
+    'day': {'i': 500, 'we': 495, 'was': 490, 'is': 485, 'of': 480, 'by': 475, 'after': 470, 'before': 465, 'every': 460},
+    'weekend': {'i': 500, 'we': 495, 'am': 490, 'will': 485, 'going': 480, 'had': 475, 'enjoyed': 470},
     
-    # ===== ANIMALS =====
-    'cat': {'sat': 500, 'ran': 490, 'jumped': 480, 'ate': 470, 'sleeps': 460, 'meowed': 450, 'is': 440, 'was': 430, 'climbed': 420},
-    'dog': {'ran': 500, 'barked': 490, 'ate': 480, 'sleeps': 470, 'jumped': 460, 'walked': 450, 'is': 440, 'was': 430, 'played': 420},
-    'bird': {'flew': 500, 'sang': 490, 'sat': 480, 'ate': 470, 'is': 460, 'has': 450, 'flies': 440, 'nested': 430},
-    'fish': {'swam': 500, 'ate': 490, 'died': 480, 'lived': 470, 'is': 460, 'swims': 450, 'jumped': 440},
-    'horse': {'ran': 500, 'jumped': 490, 'ate': 480, 'galloped': 470, 'is': 460, 'was': 450, 'neighed': 440},
-    'cow': {'ate': 500, 'gave': 490, 'is': 480, 'was': 470, 'grazed': 460, 'mooed': 450},
-    'lion': {'roared': 500, 'hunted': 490, 'ate': 480, 'slept': 470, 'is': 460, 'king': 450, 'lives': 440},
-    'tiger': {'roared': 500, 'hunted': 490, 'ate': 480, 'slept': 470, 'is': 460, 'lives': 450},
-    'elephant': {'is': 500, 'has': 490, 'looks': 480, 'walked': 470, 'big': 460, 'heavy': 450, 'lives': 440},
-    'monkey': {'climbed': 500, 'ate': 490, 'jumped': 480, 'is': 470, 'funny': 460, 'swung': 450},
-    'rabbit': {'ran': 500, 'jumped': 490, 'ate': 480, 'is': 470, 'fast': 460, 'white': 450},
-    'mouse': {'ran': 500, 'ate': 490, 'squeaked': 480, 'is': 470, 'small': 460, 'grey': 450},
+    # ANIMALS (Maximum)
+    'cat': {'sat': 500, 'ran': 495, 'jumped': 490, 'ate': 485, 'sleeps': 480, 'meowed': 475, 'is': 470, 'was': 465, 'climbed': 460, 'purred': 455},
+    'dog': {'ran': 500, 'barked': 495, 'ate': 490, 'sleeps': 485, 'jumped': 480, 'walked': 475, 'is': 470, 'was': 465, 'played': 460, 'bites': 455},
+    'bird': {'flew': 500, 'sang': 495, 'sat': 490, 'ate': 485, 'is': 480, 'has': 475, 'flies': 470, 'nested': 465, 'chirped': 460},
+    'fish': {'swam': 500, 'ate': 495, 'died': 490, 'lived': 485, 'is': 480, 'swims': 475, 'jumped': 470, 'bites': 465},
+    'horse': {'ran': 500, 'jumped': 495, 'ate': 490, 'galloped': 485, 'is': 480, 'was': 475, 'neighed': 470, 'rode': 465},
+    'cow': {'ate': 500, 'gave': 495, 'is': 490, 'was': 485, 'grazed': 480, 'mooed': 475, 'walked': 470},
+    'lion': {'roared': 500, 'hunted': 495, 'ate': 490, 'slept': 485, 'is': 480, 'king': 475, 'lives': 470, 'hunts': 465},
+    'tiger': {'roared': 500, 'hunted': 495, 'ate': 490, 'slept': 485, 'is': 480, 'lives': 475, 'striped': 470},
+    'elephant': {'is': 500, 'has': 495, 'looks': 490, 'walked': 485, 'big': 480, 'heavy': 475, 'lives': 470, 'trunk': 465},
+    'monkey': {'climbed': 500, 'ate': 495, 'jumped': 490, 'is': 485, 'funny': 480, 'swung': 475, 'plays': 470},
+    'rabbit': {'ran': 500, 'jumped': 495, 'ate': 490, 'is': 485, 'fast': 480, 'white': 475, 'cute': 470},
+    'mouse': {'ran': 500, 'ate': 495, 'squeaked': 490, 'is': 485, 'small': 480, 'grey': 475, 'quick': 470},
     
-    # ===== VEHICLES =====
-    'car': {'is': 500, 'was': 490, 'drives': 480, 'looks': 470, 'has': 460, 'needs': 450, 'costs': 440, 'runs': 430, 'parked': 420},
-    'bus': {'is': 500, 'was': 490, 'comes': 480, 'goes': 470, 'arrives': 460, 'leaves': 450, 'late': 440, 'early': 430},
-    'train': {'is': 500, 'was': 490, 'comes': 480, 'goes': 470, 'arrives': 460, 'leaves': 450, 'late': 440, 'fast': 430},
-    'bike': {'is': 500, 'was': 490, 'rides': 480, 'goes': 470, 'has': 460, 'needs': 450, 'fast': 440},
-    'plane': {'is': 500, 'was': 490, 'flies': 480, 'lands': 470, 'takes': 460, 'delayed': 450, 'fast': 440},
-    'truck': {'is': 500, 'was': 490, 'carries': 480, 'drives': 470, 'big': 460, 'heavy': 450},
-    'boat': {'is': 500, 'was': 490, 'sails': 480, 'floats': 470, 'sinks': 460, 'slow': 450},
-    'ship': {'is': 500, 'was': 490, 'sails': 480, 'floats': 470, 'sinks': 460, 'big': 450},
-    'helicopter': {'is': 500, 'was': 490, 'flies': 480, 'lands': 470, 'loud': 460},
+    # VEHICLES (Maximum)
+    'car': {'is': 500, 'was': 495, 'drives': 490, 'looks': 485, 'has': 480, 'needs': 475, 'costs': 470, 'runs': 465, 'parked': 460, 'broke': 455},
+    'bus': {'is': 500, 'was': 495, 'comes': 490, 'goes': 485, 'arrives': 480, 'leaves': 475, 'late': 470, 'early': 465, 'full': 460},
+    'train': {'is': 500, 'was': 495, 'comes': 490, 'goes': 485, 'arrives': 480, 'leaves': 475, 'late': 470, 'fast': 465, 'delayed': 460},
+    'bike': {'is': 500, 'was': 495, 'rides': 490, 'goes': 485, 'has': 480, 'needs': 475, 'fast': 470, 'new': 465},
+    'plane': {'is': 500, 'was': 495, 'flies': 490, 'lands': 485, 'takes': 480, 'delayed': 475, 'fast': 470, 'crashed': 465},
+    'truck': {'is': 500, 'was': 495, 'carries': 490, 'drives': 485, 'big': 480, 'heavy': 475, 'loaded': 470},
+    'boat': {'is': 500, 'was': 495, 'sails': 490, 'floats': 485, 'sinks': 480, 'slow': 475, 'small': 470},
+    'ship': {'is': 500, 'was': 495, 'sails': 490, 'floats': 485, 'sinks': 480, 'big': 475, 'cargo': 470},
+    'helicopter': {'is': 500, 'was': 495, 'flies': 490, 'lands': 485, 'loud': 480, 'fast': 475},
     
-    # ===== ELECTRONICS =====
-    'phone': {'is': 500, 'was': 490, 'rings': 480, 'charges': 470, 'works': 460, 'dies': 450, 'calls': 440, 'has': 430},
-    'computer': {'is': 500, 'works': 490, 'runs': 480, 'crashes': 470, 'needs': 460, 'has': 450, 'fast': 440},
-    'laptop': {'is': 500, 'works': 490, 'runs': 480, 'crashes': 470, 'charges': 460, 'light': 450},
-    'tv': {'is': 500, 'works': 490, 'shows': 480, 'plays': 470, 'has': 460, 'turns': 450, 'watched': 440},
-    'tablet': {'is': 500, 'works': 490, 'runs': 480, 'has': 470, 'charges': 460, 'light': 450},
-    'camera': {'is': 500, 'works': 490, 'takes': 480, 'has': 470, 'zooms': 460, 'records': 450},
-    'speaker': {'is': 500, 'works': 490, 'plays': 480, 'loud': 470, 'small': 460},
-    'headphones': {'are': 500, 'work': 490, 'plug': 480, 'wireless': 470, 'good': 460},
+    # ELECTRONICS
+    'phone': {'is': 500, 'was': 495, 'rings': 490, 'charges': 485, 'works': 480, 'dies': 475, 'calls': 470, 'has': 465, 'broke': 460},
+    'computer': {'is': 500, 'works': 495, 'runs': 490, 'crashes': 485, 'needs': 480, 'has': 475, 'fast': 470, 'slow': 465},
+    'laptop': {'is': 500, 'works': 495, 'runs': 490, 'crashes': 485, 'charges': 480, 'light': 475, 'portable': 470},
+    'tv': {'is': 500, 'works': 495, 'shows': 490, 'plays': 485, 'has': 480, 'turns': 475, 'watched': 470, 'broke': 465},
+    'tablet': {'is': 500, 'works': 495, 'runs': 490, 'has': 485, 'charges': 480, 'light': 475, 'portable': 470},
+    'camera': {'is': 500, 'works': 495, 'takes': 490, 'has': 485, 'zooms': 480, 'records': 475, 'battery': 470},
+    
+    # FOOD & DRINK
+    'eat': {'food': 500, 'dinner': 495, 'breakfast': 490, 'lunch': 485, 'well': 480, 'healthy': 475, 'out': 470, 'together': 465, 'something': 460},
+    'drink': {'water': 500, 'coffee': 495, 'tea': 490, 'milk': 485, 'soda': 480, 'juice': 475, 'beer': 470, 'wine': 465, 'something': 460},
+    'food': {'is': 500, 'was': 495, 'tastes': 490, 'looks': 485, 'smells': 480, 'good': 475, 'delicious': 470, 'hot': 465, 'cold': 460},
+    'water': {'is': 500, 'was': 495, 'clean': 490, 'cold': 485, 'hot': 480, 'fresh': 475, 'running': 470, 'bottle': 465, 'drink': 460},
+    'coffee': {'is': 500, 'was': 495, 'hot': 490, 'cold': 485, 'strong': 480, 'black': 475, 'good': 470, 'fresh': 465, 'iced': 460},
+    'tea': {'is': 500, 'was': 495, 'hot': 490, 'cold': 485, 'sweet': 480, 'green': 475, 'black': 470, 'iced': 465},
+    'milk': {'is': 500, 'was': 495, 'cold': 490, 'hot': 485, 'fresh': 480, 'good': 475, 'almond': 470, 'soy': 465},
+    'juice': {'is': 500, 'was': 495, 'fresh': 490, 'sweet': 485, 'cold': 480, 'orange': 475, 'apple': 470, 'grape': 465},
+    
+    # COUNTRIES & CITIES
+    'pakistan': {'is': 500, 'has': 495, 'people': 490, 'culture': 485, 'cricket': 480, 'country': 475, 'beautiful': 470, 'rich': 465},
+    'karachi': {'is': 500, 'city': 495, 'has': 490, 'people': 485, 'life': 480, 'big': 475, 'beautiful': 470, 'busy': 465},
+    'lahore': {'is': 500, 'city': 495, 'has': 490, 'food': 485, 'culture': 480, 'beautiful': 475, 'historical': 470},
+    'islamabad': {'is': 500, 'city': 495, 'has': 490, 'beautiful': 485, 'capital': 480, 'peaceful': 475, 'clean': 470},
+    'india': {'is': 500, 'has': 495, 'people': 490, 'cricket': 485, 'country': 480, 'big': 475, 'diverse': 470},
+    'usa': {'is': 500, 'has': 495, 'people': 490, 'president': 485, 'country': 480, 'big': 475, 'powerful': 470},
+    'uk': {'is': 500, 'has': 495, 'people': 490, 'prime': 485, 'minister': 480, 'country': 475, 'london': 470},
+    'canada': {'is': 500, 'has': 495, 'people': 490, 'cold': 485, 'beautiful': 480, 'snow': 475, 'maple': 470},
+    'australia': {'is': 500, 'has': 495, 'people': 490, 'hot': 485, 'beach': 480, 'kangaroo': 475, 'sydney': 470},
+    'dubai': {'is': 500, 'city': 495, 'has': 490, 'big': 485, 'beautiful': 480, 'rich': 475, 'modern': 470},
+    
+    # EMOTIONS
+    'love': {'you': 500, 'me': 495, 'him': 490, 'her': 485, 'it': 480, 'life': 475, 'family': 470, 'people': 465, 'god': 460},
+    'like': {'you': 500, 'me': 495, 'it': 490, 'this': 485, 'that': 480, 'him': 475, 'her': 470, 'them': 465},
+    'hate': {'you': 500, 'me': 495, 'it': 490, 'this': 485, 'that': 480, 'him': 475, 'her': 470, 'them': 465},
+    'want': {'to': 500, 'you': 495, 'me': 490, 'it': 485, 'this': 480, 'that': 475, 'more': 470, 'something': 465},
+    'need': {'to': 500, 'you': 495, 'me': 490, 'it': 485, 'help': 480, 'time': 475, 'money': 470, 'support': 465},
+    'feel': {'good': 500, 'bad': 495, 'happy': 490, 'sad': 485, 'tired': 480, 'great': 475, 'sick': 470, 'better': 465},
+    'care': {'about': 500, 'for': 495, 'you': 490, 'me': 485, 'them': 480, 'him': 475, 'her': 470, 'deeply': 465},
+    
+    # WEATHER
+    'weather': {'is': 500, 'was': 495, 'nice': 490, 'bad': 485, 'cold': 480, 'hot': 475, 'good': 470, 'beautiful': 465},
+    'rain': {'is': 500, 'was': 495, 'heavy': 490, 'coming': 485, 'falling': 480, 'outside': 475, 'started': 470, 'stopped': 465},
+    'sun': {'is': 500, 'was': 495, 'shining': 490, 'hot': 485, 'bright': 480, 'set': 475, 'rise': 470, 'out': 465},
+    'cold': {'weather': 500, 'day': 495, 'night': 490, 'outside': 485, 'water': 480, 'drink': 475, 'morning': 470},
+    'hot': {'weather': 500, 'day': 495, 'outside': 490, 'water': 485, 'coffee': 480, 'sun': 475, 'summer': 470},
+    'winter': {'is': 500, 'coming': 495, 'cold': 490, 'season': 485, 'here': 480, 'snow': 475, 'months': 470},
+    'summer': {'is': 500, 'coming': 495, 'hot': 490, 'season': 485, 'here': 480, 'vacation': 475, 'months': 470},
+    
+    # FAMILY
+    'mother': {'is': 500, 'was': 495, 'loves': 490, 'cooks': 485, 'works': 480, 'said': 475, 'called': 470, 'helps': 465},
+    'father': {'is': 500, 'was': 495, 'works': 490, 'loves': 485, 'helps': 480, 'said': 475, 'called': 470},
+    'brother': {'is': 500, 'was': 495, 'loves': 490, 'works': 485, 'studies': 480, 'called': 475, 'helps': 470},
+    'sister': {'is': 500, 'was': 495, 'loves': 490, 'studies': 485, 'helps': 480, 'called': 475, 'works': 470},
+    'friend': {'is': 500, 'was': 495, 'good': 490, 'best': 485, 'true': 480, 'old': 475, 'close': 470, 'dear': 465},
+    'family': {'is': 500, 'was': 495, 'my': 490, 'our': 485, 'happy': 480, 'loving': 475, 'big': 470, 'whole': 465},
+    'parents': {'are': 500, 'were': 495, 'love': 490, 'work': 485, 'live': 480, 'said': 475, 'taught': 470},
+    'children': {'are': 500, 'were': 495, 'play': 490, 'study': 485, 'love': 480, 'need': 475, 'like': 470},
+    
+    # ACTION VERBS
+    'run': {'fast': 500, 'away': 495, 'out': 490, 'time': 485, 'program': 480, 'daily': 475, 'early': 470, 'morning': 465, 'home': 460},
+    'walk': {'away': 500, 'in': 495, 'out': 490, 'to': 485, 'fast': 480, 'slowly': 475, 'daily': 470, 'home': 465, 'together': 460},
+    'jump': {'high': 500, 'low': 495, 'in': 490, 'out': 485, 'over': 480, 'up': 475, 'down': 470, 'rope': 465},
+    'sit': {'down': 500, 'here': 495, 'there': 490, 'quietly': 485, 'still': 480, 'alone': 475, 'together': 470},
+    'stand': {'up': 500, 'here': 495, 'there': 490, 'alone': 485, 'still': 480, 'firm': 475, 'together': 470},
+    'sleep': {'well': 500, 'early': 495, 'late': 490, 'peacefully': 485, 'deeply': 480, 'alone': 475, 'together': 470, 'soundly': 465},
+    'wake': {'up': 500, 'early': 495, 'late': 490, 'in': 485, 'morning': 480, 'suddenly': 475, 'from': 470},
+    'work': {'hard': 500, 'well': 495, 'daily': 490, 'here': 485, 'there': 480, 'together': 475, 'alone': 470, 'from': 465},
+    'study': {'hard': 500, 'well': 495, 'daily': 490, 'here': 485, 'there': 480, 'together': 475, 'alone': 470, 'english': 465},
+    'play': {'well': 500, 'together': 495, 'alone': 490, 'daily': 485, 'games': 480, 'sports': 475, 'outside': 470, 'inside': 465},
+    'read': {'books': 500, 'newspaper': 495, 'story': 490, 'article': 485, 'daily': 480, 'aloud': 475, 'carefully': 470, 'quickly': 465},
+    'write': {'a': 500, 'book': 495, 'letter': 490, 'story': 485, 'email': 480, 'note': 475, 'article': 470, 'poem': 465},
+    'listen': {'to': 500, 'music': 495, 'me': 490, 'him': 485, 'her': 480, 'carefully': 475, 'closely': 470, 'podcast': 465},
+    'speak': {'to': 500, 'me': 495, 'him': 490, 'her': 485, 'english': 480, 'loudly': 475, 'softly': 470, 'truth': 465},
+    'talk': {'to': 500, 'me': 495, 'him': 490, 'her': 485, 'about': 480, 'loudly': 475, 'softly': 470, 'openly': 465},
+    'ask': {'me': 500, 'him': 495, 'her': 490, 'them': 485, 'you': 480, 'for': 475, 'about': 470, 'question': 465},
+    'answer': {'me': 500, 'him': 495, 'her': 490, 'them': 485, 'the': 480, 'phone': 475, 'question': 470, 'call': 465},
+    'help': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'us': 480, 'them': 475, 'yourself': 470, 'others': 465},
+    'call': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'them': 480, 'now': 475, 'later': 470, 'back': 465},
+    'meet': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'them': 480, 'today': 475, 'tomorrow': 470, 'there': 465},
 
-# ===== FOOD & DRINK =====
-    'eat': {'food': 500, 'dinner': 490, 'breakfast': 480, 'lunch': 470, 'well': 460, 'healthy': 450, 'out': 440, 'together': 430},
-    'drink': {'water': 500, 'coffee': 490, 'tea': 480, 'milk': 470, 'soda': 460, 'juice': 450, 'beer': 440, 'wine': 430},
-    'food': {'is': 500, 'was': 490, 'tastes': 480, 'looks': 470, 'smells': 460, 'good': 450, 'delicious': 440},
-    'water': {'is': 500, 'was': 490, 'clean': 480, 'cold': 470, 'hot': 460, 'fresh': 450, 'running': 440, 'bottle': 430},
-    'coffee': {'is': 500, 'was': 490, 'hot': 480, 'cold': 470, 'strong': 460, 'black': 450, 'good': 440, 'fresh': 430},
-    'tea': {'is': 500, 'was': 490, 'hot': 480, 'cold': 470, 'sweet': 460, 'green': 450, 'black': 440},
-    'milk': {'is': 500, 'was': 490, 'cold': 480, 'hot': 470, 'fresh': 460, 'good': 450, 'almond': 440},
-    'juice': {'is': 500, 'was': 490, 'fresh': 480, 'sweet': 470, 'cold': 460, 'orange': 450, 'apple': 440},
-    'rice': {'is': 500, 'was': 490, 'cooked': 480, 'white': 470, 'good': 460, 'hot': 450},
-    'bread': {'is': 500, 'was': 490, 'fresh': 480, 'white': 470, 'good': 460, 'soft': 450},
-    'chicken': {'is': 500, 'was': 490, 'cooked': 480, 'grilled': 470, 'fried': 460, 'good': 450},
-    'meat': {'is': 500, 'was': 490, 'cooked': 480, 'raw': 470, 'fresh': 460, 'good': 450},
-    'vegetable': {'is': 500, 'was': 490, 'cooked': 480, 'fresh': 470, 'green': 460, 'good': 450},
-    'fruit': {'is': 500, 'was': 490, 'fresh': 480, 'sweet': 470, 'ripe': 460, 'good': 450},
+    # ARTICLES & DETERMINERS
+    'a': {'good': 500, 'great': 495, 'beautiful': 490, 'big': 485, 'small': 480, 'nice': 475, 'new': 470, 'old': 465, 'little': 460, 'lot': 455},
+    'an': {'apple': 500, 'example': 495, 'idea': 490, 'hour': 485, 'opportunity': 480, 'elephant': 475, 'umbrella': 470, 'orange': 465, 'honest': 460},
+    'the': {'best': 500, 'first': 495, 'last': 490, 'same': 485, 'only': 480, 'main': 475, 'big': 470, 'small': 465, 'new': 460, 'old': 455},
+    'this': {'is': 500, 'was': 495, 'has': 490, 'looks': 485, 'seems': 480, 'one': 475, 'way': 470, 'time': 465, 'place': 460},
+    'that': {'is': 500, 'was': 495, 'has': 490, 'looks': 485, 'seems': 480, 'one': 475, 'way': 470, 'time': 465, 'place': 460},
+    'these': {'are': 500, 'were': 495, 'have': 490, 'look': 485, 'days': 480, 'people': 475, 'things': 470, 'times': 465},
+    'those': {'are': 500, 'were': 495, 'have': 490, 'look': 485, 'days': 480, 'people': 475, 'things': 470, 'times': 465},
     
-    # ===== ARTICLES & DETERMINERS =====
-    'a': {'good': 500, 'great': 490, 'beautiful': 480, 'big': 470, 'small': 460, 'nice': 450, 'new': 440, 'old': 430, 'little': 420},
-    'an': {'apple': 500, 'example': 490, 'idea': 480, 'hour': 470, 'opportunity': 460, 'elephant': 450, 'umbrella': 440, 'orange': 430},
-    'the': {'best': 500, 'first': 490, 'last': 480, 'same': 470, 'only': 460, 'main': 450, 'big': 440, 'small': 430, 'new': 420},
-    'this': {'is': 500, 'was': 490, 'has': 480, 'looks': 470, 'seems': 460, 'one': 450, 'way': 440, 'time': 430},
-    'that': {'is': 500, 'was': 490, 'has': 480, 'looks': 470, 'seems': 460, 'one': 450, 'way': 440, 'time': 430},
-    'these': {'are': 500, 'were': 490, 'have': 480, 'look': 470, 'days': 460, 'people': 450, 'things': 440},
-    'those': {'are': 500, 'were': 490, 'have': 480, 'look': 470, 'days': 460, 'people': 450, 'things': 440},
+    # PREPOSITIONS
+    'in': {'the': 500, 'a': 495, 'my': 490, 'your': 485, 'his': 480, 'her': 475, 'this': 470, 'that': 465, 'front': 460, 'order': 455},
+    'on': {'the': 500, 'a': 495, 'my': 490, 'your': 485, 'top': 480, 'way': 475, 'time': 470, 'earth': 465, 'fire': 460},
+    'at': {'home': 500, 'work': 495, 'school': 490, 'night': 485, 'morning': 480, 'noon': 475, 'ease': 470, 'least': 465},
+    'for': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'us': 480, 'them': 475, 'all': 470, 'sure': 465, 'example': 460},
+    'with': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'us': 480, 'them': 475, 'love': 470, 'care': 465, 'respect': 460},
+    'without': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'us': 480, 'them': 475, 'doubt': 470, 'question': 465},
+    'about': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'us': 480, 'it': 475, 'life': 470, 'love': 465, 'time': 460},
+    'from': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'there': 480, 'here': 475, 'home': 470, 'work': 465, 'school': 460},
+    'to': {'me': 500, 'you': 495, 'him': 490, 'her': 485, 'us': 480, 'them': 475, 'be': 470, 'go': 465, 'come': 460},
+    'of': {'the': 500, 'a': 495, 'my': 490, 'your': 485, 'his': 480, 'her': 475, 'course': 470, 'course': 465},
+    'by': {'the': 500, 'my': 495, 'your': 490, 'him': 485, 'her': 480, 'us': 475, 'then': 470, 'now': 465},
+    'up': {'to': 500, 'the': 495, 'in': 490, 'for': 485, 'and': 480, 'down': 475, 'here': 470, 'there': 465},
+    'down': {'the': 500, 'to': 495, 'in': 490, 'for': 485, 'and': 480, 'up': 475, 'here': 470, 'there': 465},
+    'over': {'the': 500, 'there': 495, 'here': 490, 'time': 485, 'and': 480, 'again': 475},
+    'under': {'the': 500, 'a': 495, 'my': 490, 'your': 485, 'control': 480, 'pressure': 475},
     
-    # ===== PREPOSITIONS =====
-    'in': {'the': 500, 'a': 490, 'my': 480, 'your': 470, 'his': 460, 'her': 450, 'this': 440, 'that': 430, 'front': 420},
-    'on': {'the': 500, 'a': 490, 'my': 480, 'your': 470, 'top': 460, 'way': 450, 'time': 440, 'earth': 430},
-    'at': {'home': 500, 'work': 490, 'school': 480, 'night': 470, 'morning': 460, 'noon': 450, 'ease': 440},
-    'for': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'us': 460, 'them': 450, 'all': 440, 'sure': 430},
-    'with': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'us': 460, 'them': 450, 'love': 440, 'care': 430},
-    'without': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'us': 460, 'them': 450, 'doubt': 440},
-    'about': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'us': 460, 'it': 450, 'life': 440, 'love': 430},
-    'from': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'there': 460, 'here': 450, 'home': 440},
-    'to': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'us': 460, 'them': 450, 'be': 440, 'go': 430},
-    'of': {'the': 500, 'a': 490, 'my': 480, 'your': 470, 'his': 460, 'her': 450, 'course': 440},
-    'by': {'the': 500, 'my': 490, 'your': 480, 'him': 470, 'her': 460, 'us': 450, 'then': 440},
-    'up': {'to': 500, 'the': 490, 'in': 480, 'for': 470, 'and': 460, 'down': 450, 'here': 440},
-    'down': {'the': 500, 'to': 490, 'in': 480, 'for': 470, 'and': 460, 'up': 450},
-    
-    # ===== ACTION VERBS =====
-    'run': {'fast': 500, 'away': 490, 'out': 480, 'time': 470, 'program': 460, 'daily': 450, 'early': 440, 'morning': 430},
-    'walk': {'away': 500, 'in': 490, 'out': 480, 'to': 470, 'fast': 460, 'slowly': 450, 'daily': 440, 'home': 430},
-    'jump': {'high': 500, 'low': 490, 'in': 480, 'out': 470, 'over': 460, 'up': 450, 'down': 440},
-    'sit': {'down': 500, 'here': 490, 'there': 480, 'quietly': 470, 'still': 460, 'alone': 450, 'together': 440},
-    'stand': {'up': 500, 'here': 490, 'there': 480, 'alone': 470, 'still': 460, 'firm': 450},
-    'sleep': {'well': 500, 'early': 490, 'late': 480, 'peacefully': 470, 'deeply': 460, 'alone': 450, 'together': 440},
-    'wake': {'up': 500, 'early': 490, 'late': 480, 'in': 470, 'morning': 460, 'suddenly': 450},
-    'work': {'hard': 500, 'well': 490, 'daily': 480, 'here': 470, 'there': 460, 'together': 450, 'alone': 440},
-    'study': {'hard': 500, 'well': 490, 'daily': 480, 'here': 470, 'there': 460, 'together': 450, 'alone': 440},
-    'play': {'well': 500, 'together': 490, 'alone': 480, 'daily': 470, 'games': 460, 'sports': 450, 'outside': 440},
-    'read': {'books': 500, 'newspaper': 490, 'story': 480, 'article': 470, 'daily': 460, 'aloud': 450, 'carefully': 440},
-    'write': {'a': 500, 'book': 490, 'letter': 480, 'story': 470, 'email': 460, 'note': 450, 'article': 440},
-    'listen': {'to': 500, 'music': 490, 'me': 480, 'him': 470, 'her': 460, 'carefully': 450, 'closely': 440},
-    'speak': {'to': 500, 'me': 490, 'him': 480, 'her': 470, 'english': 460, 'loudly': 450, 'softly': 440},
-    'talk': {'to': 500, 'me': 490, 'him': 480, 'her': 470, 'about': 460, 'loudly': 450, 'softly': 440},
-    'ask': {'me': 500, 'him': 490, 'her': 480, 'them': 470, 'you': 460, 'for': 450, 'about': 440},
-    'answer': {'me': 500, 'him': 490, 'her': 480, 'them': 470, 'the': 460, 'phone': 450, 'question': 440},
-    'help': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'us': 460, 'them': 450, 'yourself': 440},
-    'call': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'them': 460, 'now': 450, 'later': 440},
-    'meet': {'me': 500, 'you': 490, 'him': 480, 'her': 470, 'them': 460, 'today': 450, 'tomorrow': 440},
-    
-    # ===== COUNTRIES & CITIES =====
-    'pakistan': {'is': 500, 'has': 490, 'people': 480, 'culture': 470, 'cricket': 460, 'country': 450, 'beautiful': 440},
-    'karachi': {'is': 500, 'city': 490, 'has': 480, 'people': 470, 'life': 460, 'big': 450, 'beautiful': 440},
-    'lahore': {'is': 500, 'city': 490, 'has': 480, 'food': 470, 'culture': 460, 'beautiful': 450},
-    'islamabad': {'is': 500, 'city': 490, 'has': 480, 'beautiful': 470, 'capital': 460, 'peaceful': 450},
-    'india': {'is': 500, 'has': 490, 'people': 480, 'cricket': 470, 'country': 460, 'big': 450},
-    'usa': {'is': 500, 'has': 490, 'people': 480, 'president': 470, 'country': 460, 'big': 450},
-    'uk': {'is': 500, 'has': 490, 'people': 480, 'prime': 470, 'minister': 460, 'country': 450},
-    'canada': {'is': 500, 'has': 490, 'people': 480, 'cold': 470, 'beautiful': 460, 'snow': 450},
-    'australia': {'is': 500, 'has': 490, 'people': 480, 'hot': 470, 'beach': 460, 'kangaroo': 450},
-    'dubai': {'is': 500, 'city': 490, 'has': 480, 'big': 470, 'beautiful': 460, 'rich': 450},
-    'london': {'is': 500, 'city': 490, 'has': 480, 'big': 470, 'beautiful': 460, 'famous': 450},
-    'new york': {'is': 500, 'city': 490, 'has': 480, 'big': 470, 'busy': 460, 'famous': 450},
-    
-    # ===== EMOTIONS =====
-    'love': {'you': 500, 'me': 490, 'him': 480, 'her': 470, 'it': 460, 'life': 450, 'family': 440, 'people': 430},
-    'like': {'you': 500, 'me': 490, 'it': 480, 'this': 470, 'that': 460, 'him': 450, 'her': 440},
-    'hate': {'you': 500, 'me': 490, 'it': 480, 'this': 470, 'that': 460, 'him': 450, 'her': 440},
-    'want': {'to': 500, 'you': 490, 'me': 480, 'it': 470, 'this': 460, 'that': 450, 'more': 440},
-    'need': {'to': 500, 'you': 490, 'me': 480, 'it': 470, 'help': 460, 'time': 450, 'money': 440},
-    'feel': {'good': 500, 'bad': 490, 'happy': 480, 'sad': 470, 'tired': 460, 'great': 450, 'sick': 440},
-    'care': {'about': 500, 'for': 490, 'you': 480, 'me': 470, 'them': 460, 'him': 450, 'her': 440},
-    
-    # ===== WEATHER =====
-    'weather': {'is': 500, 'was': 490, 'nice': 480, 'bad': 470, 'cold': 460, 'hot': 450, 'good': 440},
-    'rain': {'is': 500, 'was': 490, 'heavy': 480, 'coming': 470, 'falling': 460, 'outside': 450, 'started': 440},
-    'sun': {'is': 500, 'was': 490, 'shining': 480, 'hot': 470, 'bright': 460, 'set': 450, 'rise': 440},
-    'cold': {'weather': 500, 'day': 490, 'night': 480, 'outside': 470, 'water': 460, 'drink': 450},
-    'hot': {'weather': 500, 'day': 490, 'outside': 480, 'water': 470, 'coffee': 460, 'sun': 450},
-    'winter': {'is': 500, 'coming': 490, 'cold': 480, 'season': 470, 'here': 460},
-    'summer': {'is': 500, 'coming': 490, 'hot': 480, 'season': 470, 'here': 460},
-    
-    # ===== FAMILY =====
-    'mother': {'is': 500, 'was': 490, 'loves': 480, 'cooks': 470, 'works': 460, 'said': 450, 'called': 440},
-    'father': {'is': 500, 'was': 490, 'works': 480, 'loves': 470, 'helps': 460, 'said': 450},
-    'brother': {'is': 500, 'was': 490, 'loves': 480, 'works': 470, 'studies': 460, 'called': 450},
-    'sister': {'is': 500, 'was': 490, 'loves': 480, 'studies': 470, 'helps': 460, 'called': 450},
-    'friend': {'is': 500, 'was': 490, 'good': 480, 'best': 470, 'true': 460, 'old': 450, 'close': 440},
-    'family': {'is': 500, 'was': 490, 'my': 480, 'our': 470, 'happy': 460, 'loving': 450},
-    'parents': {'are': 500, 'were': 490, 'love': 480, 'work': 470, 'live': 460, 'said': 450},
-    'children': {'are': 500, 'were': 490, 'play': 480, 'study': 470, 'love': 460, 'need': 450},
-    
-    # ===== BODY PARTS =====
-    'head': {'is': 500, 'hurts': 490, 'aches': 480, 'up': 470, 'down': 460, 'and': 450},
-    'hand': {'is': 500, 'hurts': 490, 'up': 480, 'down': 470, 'in': 460, 'and': 450},
-    'eye': {'is': 500, 'hurts': 490, 'see': 480, 'blue': 470, 'brown': 460, 'right': 450},
-    'ear': {'is': 500, 'hurts': 490, 'hear': 480, 'left': 470, 'right': 460},
-    'nose': {'is': 500, 'hurts': 490, 'runny': 480, 'big': 470, 'small': 460},
-    'mouth': {'is': 500, 'open': 490, 'closed': 480, 'big': 470, 'small': 460},
-    'heart': {'is': 500, 'beats': 490, 'hurts': 480, 'full': 470, 'broken': 460, 'pumping': 450},
-    
-    # ===== FALLBACK =====
-    'default': {'the': 500, 'and': 490, 'to': 480, 'of': 470, 'for': 460, 'with': 450, 'in': 440, 'on': 430, 'is': 420, 'are': 410, 'was': 400, 'were': 390}
+    # DEFAULT FALLBACK
+    'default': {'the': 500, 'and': 495, 'to': 490, 'of': 485, 'for': 480, 'with': 475, 'in': 470, 'on': 465, 'is': 460, 'are': 455, 'was': 450, 'were': 445}
 }
 
-for word, suggestions in pretrained.items():
+# ============================================
+# TRIGRAM DATA (Last 2 words ke hisaab se - Maximum)
+# ============================================
+
+trigram_pretrained = {
+    # i am + ?
+    'i am': {'a': 500, 'going': 495, 'doing': 490, 'trying': 485, 'here': 480, 'not': 475, 'very': 470, 'so': 465, 'just': 460},
+    'i have': {'a': 500, 'to': 495, 'been': 490, 'got': 485, 'no': 480, 'never': 475, 'always': 470},
+    'i will': {'be': 500, 'go': 495, 'come': 490, 'see': 485, 'get': 480, 'do': 475, 'make': 470},
+    'i can': {'be': 500, 'do': 495, 'go': 490, 'see': 485, 'help': 480, 'get': 475, 'make': 470},
+    'i love': {'you': 500, 'to': 495, 'it': 490, 'her': 485, 'him': 480, 'this': 475},
+    'i want': {'to': 500, 'you': 495, 'it': 490, 'this': 485, 'that': 480, 'more': 475},
+    'i need': {'to': 500, 'you': 495, 'help': 490, 'it': 485, 'this': 480, 'more': 475},
+    'i like': {'to': 500, 'you': 495, 'it': 490, 'this': 485, 'that': 480, 'her': 475},
+    
+    # you are + ?
+    'you are': {'a': 500, 'the': 495, 'very': 490, 'so': 485, 'not': 480, 'my': 475, 'going': 470},
+    'you have': {'a': 500, 'to': 495, 'been': 490, 'got': 485, 'no': 480, 'never': 475},
+    'you will': {'be': 500, 'go': 495, 'come': 490, 'see': 485, 'get': 480, 'find': 475},
+    'you can': {'be': 500, 'do': 495, 'go': 490, 'see': 485, 'get': 480, 'help': 475},
+    'you should': {'be': 500, 'go': 495, 'come': 490, 'see': 485, 'get': 480, 'try': 475},
+    
+    # he is + ?
+    'he is': {'a': 500, 'the': 495, 'very': 490, 'my': 485, 'going': 480, 'not': 475, 'so': 470},
+    'he has': {'a': 500, 'been': 495, 'to': 490, 'got': 485, 'no': 480, 'never': 475},
+    'he will': {'be': 500, 'go': 495, 'come': 490, 'see': 485, 'get': 480},
+    'he can': {'be': 500, 'do': 495, 'go': 490, 'see': 485, 'help': 480},
+    
+    # she is + ?
+    'she is': {'a': 500, 'the': 495, 'very': 490, 'my': 485, 'beautiful': 480, 'going': 475},
+    'she has': {'a': 500, 'been': 495, 'to': 490, 'got': 485, 'no': 480},
+    'she will': {'be': 500, 'go': 495, 'come': 490, 'see': 485},
+    
+    # it is + ?
+    'it is': {'a': 500, 'the': 495, 'very': 490, 'not': 485, 'so': 480, 'just': 475, 'really': 470},
+    'it was': {'a': 500, 'the': 495, 'very': 490, 'not': 485, 'so': 480, 'just': 475},
+    'it has': {'a': 500, 'been': 495, 'to': 490, 'got': 485, 'no': 480},
+    
+    # we are + ?
+    'we are': {'going': 500, 'the': 495, 'very': 490, 'not': 485, 'so': 480, 'here': 475, 'ready': 470},
+    'we have': {'a': 500, 'to': 495, 'been': 490, 'got': 485, 'no': 480, 'never': 475},
+    'we will': {'be': 500, 'go': 495, 'come': 490, 'see': 485, 'get': 480},
+    'we can': {'be': 500, 'do': 495, 'go': 490, 'see': 485, 'help': 480},
+    
+    # they are + ?
+    'they are': {'going': 500, 'the': 495, 'very': 490, 'not': 485, 'so': 480, 'here': 475},
+    'they have': {'a': 500, 'been': 495, 'to': 490, 'got': 485, 'no': 480},
+    'they will': {'be': 500, 'go': 495, 'come': 490, 'see': 485},
+    
+    # article + adjective patterns
+    'a good': {'boy': 500, 'girl': 495, 'day': 490, 'person': 485, 'job': 480, 'idea': 475, 'time': 470},
+    'a bad': {'day': 500, 'boy': 495, 'girl': 490, 'person': 485, 'habit': 480, 'idea': 475},
+    'a beautiful': {'day': 500, 'girl': 495, 'house': 490, 'car': 485, 'smile': 480, 'view': 475},
+    'a big': {'house': 500, 'car': 495, 'problem': 490, 'fan': 485, 'deal': 480, 'success': 475},
+    'a small': {'house': 500, 'car': 495, 'cat': 490, 'dog': 485, 'problem': 480, 'town': 475},
+    'a new': {'car': 500, 'house': 495, 'job': 490, 'phone': 485, 'friend': 480, 'day': 475},
+    'an old': {'car': 500, 'house': 495, 'friend': 490, 'man': 485, 'woman': 480, 'building': 475},
+    'a great': {'day': 500, 'job': 495, 'idea': 490, 'person': 485, 'friend': 480, 'time': 475},
+    'a nice': {'day': 500, 'person': 495, 'car': 490, 'house': 485, 'smile': 480, 'place': 475},
+    
+    'the best': {'day': 500, 'friend': 495, 'car': 490, 'house': 485, 'job': 480, 'idea': 475},
+    'the first': {'day': 500, 'time': 495, 'person': 490, 'thing': 485, 'place': 480, 'step': 475},
+    'the last': {'day': 500, 'time': 495, 'person': 490, 'thing': 485, 'night': 480, 'week': 475},
+    'the same': {'day': 500, 'time': 495, 'person': 490, 'thing': 485, 'place': 480, 'way': 475},
+    'the only': {'way': 500, 'person': 495, 'thing': 490, 'reason': 485, 'one': 480},
+    
+    # how + ? patterns
+    'how are': {'you': 500, 'we': 495, 'they': 490, 'things': 485, 'you': 480},
+    'how is': {'it': 500, 'he': 495, 'she': 490, 'life': 485, 'everything': 480},
+    'how to': {'make': 500, 'get': 495, 'do': 490, 'be': 485, 'use': 480, 'fix': 475},
+    'how do': {'you': 500, 'we': 495, 'they': 490, 'i': 485, 'you': 480},
+    'how was': {'your': 500, 'the': 495, 'it': 490, 'today': 485, 'day': 480},
+    
+    # what + ? patterns
+    'what is': {'your': 500, 'the': 495, 'this': 490, 'that': 485, 'it': 480, 'his': 475},
+    'what are': {'you': 500, 'we': 495, 'they': 490, 'these': 485, 'those': 480, 'your': 475},
+    'what do': {'you': 500, 'we': 495, 'they': 490, 'i': 485, 'you': 480},
+    'what was': {'that': 500, 'it': 495, 'the': 490, 'your': 485, 'his': 480},
+    'what does': {'it': 500, 'he': 495, 'she': 490, 'this': 485, 'that': 480},
+    
+    # where + ? patterns
+    'where is': {'the': 500, 'my': 495, 'your': 490, 'he': 485, 'she': 480, 'it': 475},
+    'where are': {'you': 500, 'we': 495, 'they': 490, 'my': 485, 'your': 480, 'the': 475},
+    'where did': {'you': 500, 'he': 495, 'she': 490, 'they': 485, 'we': 480},
+    'where do': {'you': 500, 'we': 495, 'they': 490, 'i': 485},
+    
+    # why + ? patterns
+    'why is': {'it': 500, 'he': 495, 'she': 490, 'this': 485, 'that': 480, 'the': 475},
+    'why do': {'you': 500, 'we': 495, 'they': 490, 'i': 485, 'you': 480},
+    'why did': {'you': 500, 'he': 495, 'she': 490, 'they': 485, 'we': 480},
+    'why would': {'you': 500, 'he': 495, 'she': 490, 'they': 485},
+    
+    # when + ? patterns
+    'when is': {'it': 500, 'the': 495, 'your': 490, 'he': 485, 'she': 480, 'this': 475},
+    'when will': {'you': 500, 'we': 495, 'they': 490, 'he': 485, 'she': 480, 'it': 475},
+    'when did': {'you': 500, 'he': 495, 'she': 490, 'they': 485, 'we': 480},
+    'when do': {'you': 500, 'we': 495, 'they': 490, 'i': 485},
+    
+    # every + noun patterns
+    'every day': {'i': 500, 'we': 495, 'he': 490, 'she': 485, 'they': 480, 'you': 475},
+    'every night': {'i': 500, 'we': 495, 'he': 490, 'she': 485, 'they': 480, 'sleep': 475},
+    'every time': {'i': 500, 'we': 495, 'he': 490, 'she': 485, 'you': 480, 'they': 475},
+    'every morning': {'i': 500, 'we': 495, 'he': 490, 'she': 485, 'wake': 480},
+    'every week': {'i': 500, 'we': 495, 'he': 490, 'she': 485, 'go': 480},
+    
+    # some + noun patterns
+    'some one': {'is': 500, 'has': 495, 'called': 490, 'said': 485, 'came': 480, 'told': 475},
+    'some people': {'are': 500, 'have': 495, 'say': 490, 'think': 485, 'like': 480, 'dont': 475},
+    'some time': {'ago': 500, 'later': 495, 'now': 490, 'i': 485, 'we': 480},
+    'some day': {'i': 500, 'we': 495, 'you': 490, 'he': 485, 'she': 480},
+    'some things': {'are': 500, 'never': 495, 'dont': 490, 'take': 485},
+    
+    # no + noun patterns
+    'no one': {'knows': 500, 'cares': 495, 'likes': 490, 'loves': 485, 'said': 480, 'told': 475},
+    'no way': {'to': 500, 'out': 495, 'i': 490, 'he': 485, 'she': 480, 'we': 475},
+    'no time': {'to': 500, 'for': 495, 'left': 490, 'like': 485, 'now': 480},
+    'no problem': {'at': 500, 'for': 495, 'with': 490, 'i': 485, 'we': 480},
+    
+    # greeting patterns
+    'hello how': {'are': 500, 'is': 495, 'do': 490, 'have': 485},
+    'thank you': {'for': 500, 'very': 495, 'so': 490, 'sir': 485, 'maam': 480},
+    'how are': {'you': 500, 'we': 495, 'they': 490, 'things': 485},
+    'what is': {'your': 500, 'the': 495, 'this': 490, 'that': 485},
+    
+    # common sentence starters
+    'there is': {'a': 500, 'no': 495, 'nothing': 490, 'something': 485, 'always': 480, 'never': 475},
+    'there are': {'many': 500, 'some': 495, 'no': 490, 'a': 485, 'several': 480},
+    'this is': {'a': 500, 'the': 495, 'my': 490, 'your': 485, 'our': 480},
+    'that is': {'a': 500, 'the': 495, 'my': 490, 'your': 485, 'what': 480},
+    'it is': {'a': 500, 'the': 495, 'not': 490, 'very': 485, 'so': 480},
+    'here is': {'a': 500, 'the': 495, 'my': 490, 'your': 485, 'our': 480},
+    
+    # time patterns
+    'today is': {'a': 500, 'the': 495, 'going': 490, 'my': 485, 'your': 480},
+    'tomorrow is': {'a': 500, 'the': 495, 'going': 490, 'my': 485},
+    'yesterday was': {'a': 500, 'the': 495, 'great': 490, 'good': 485, 'bad': 480},
+    
+    # filler patterns
+    'i think': {'that': 500, 'i': 495, 'you': 490, 'he': 485, 'she': 480, 'we': 475},
+    'i believe': {'that': 500, 'i': 495, 'you': 490, 'he': 485, 'she': 480},
+    'i hope': {'you': 500, 'we': 495, 'they': 490, 'he': 485, 'she': 480},
+    'i guess': {'so': 500, 'not': 495, 'that': 490, 'i': 485, 'you': 480},
+    'you know': {'what': 500, 'that': 495, 'i': 490, 'how': 485, 'the': 480},
+    
+    # adjective + noun common patterns
+    'very good': {'day': 500, 'job': 495, 'idea': 490, 'person': 485, 'friend': 480},
+    'very nice': {'person': 500, 'car': 495, 'house': 490, 'day': 485, 'place': 480},
+    'very happy': {'birthday': 500, 'day': 495, 'life': 490, 'family': 485},
+    'very sad': {'day': 500, 'story': 495, 'ending': 490, 'news': 485},
+    'very big': {'house': 500, 'car': 495, 'problem': 490, 'fan': 485},
+    'very small': {'house': 500, 'car': 495, 'cat': 490, 'dog': 485},
+    
+    # verb + preposition patterns
+    'listen to': {'music': 500, 'me': 495, 'him': 490, 'her': 485, 'the': 480},
+    'talk to': {'me': 500, 'him': 495, 'her': 490, 'them': 485, 'you': 480},
+    'go to': {'the': 500, 'work': 495, 'school': 490, 'home': 485, 'bed': 480},
+    'come to': {'the': 500, 'my': 495, 'your': 490, 'our': 485, 'home': 480},
+    'look at': {'me': 500, 'him': 495, 'her': 490, 'the': 485, 'this': 480},
+    'think about': {'it': 500, 'you': 495, 'me': 490, 'him': 485, 'her': 480},
+    'care about': {'you': 500, 'me': 495, 'him': 490, 'her': 485, 'them': 480},
+}
+
+# ============================================
+# LOAD ALL DATA
+# ============================================
+
+for word, suggestions in bigram_pretrained.items():
     for sugg, count in suggestions.items():
         bigrams[word][sugg] = max(bigrams[word][sugg], count)
 
-def save_data():
-    save_dict = {}
-    for word, suggestions in bigrams.items():
-        save_dict[word] = dict(suggestions)
-    with open(LEARNING_FILE, 'w', encoding='utf-8') as f:
-        json.dump(save_dict, f, indent=2)
+for two_words, suggestions in trigram_pretrained.items():
+    for sugg, count in suggestions.items():
+        trigrams[two_words][sugg] = max(trigrams[two_words][sugg], count)
 
-def learn_pair(word, next_word):
+# ============================================
+# SAVE FUNCTIONS
+# ============================================
+
+def save_data():
+    # Save bigrams
+    save_bigrams = {}
+    for word, suggestions in bigrams.items():
+        save_bigrams[word] = dict(suggestions)
+    with open(LEARNING_FILE, 'w', encoding='utf-8') as f:
+        json.dump(save_bigrams, f, indent=2)
+    
+    # Save trigrams
+    save_trigrams = {}
+    for two_words, suggestions in trigrams.items():
+        save_trigrams[two_words] = dict(suggestions)
+    with open(TRIGRAM_FILE, 'w', encoding='utf-8') as f:
+        json.dump(save_trigrams, f, indent=2)
+
+# ============================================
+# LEARN FUNCTIONS
+# ============================================
+
+def learn_trigram(word1, word2, next_word):
+    word1 = word1.lower().strip()
+    word2 = word2.lower().strip()
+    next_word = next_word.lower().strip()
+    if word1 and word2 and next_word:
+        key = f"{word1} {word2}"
+        trigrams[key][next_word] += 1
+        save_data()
+
+def learn_bigram(word, next_word):
     word = word.lower().strip()
     next_word = next_word.lower().strip()
     if word and next_word:
         bigrams[word][next_word] += 1
         save_data()
 
-def predict(word, top_n=6):
-    word = word.lower().strip()
-    if word in bigrams and bigrams[word]:
-        sorted_words = sorted(bigrams[word].items(), key=lambda x: x[1], reverse=True)
+# ============================================
+# PREDICT FUNCTION (Trigram first, then Bigram)
+# ============================================
+
+def predict_next(last_word, second_last_word=None, top_n=6):
+    last_word = last_word.lower().strip()
+    
+    # First try trigram (if we have two words)
+    if second_last_word:
+        key = f"{second_last_word} {last_word}"
+        if key in trigrams and trigrams[key]:
+            sorted_words = sorted(trigrams[key].items(), key=lambda x: x[1], reverse=True)
+            return [w for w, _ in sorted_words[:top_n]]
+    
+    # Then try bigram
+    if last_word in bigrams and bigrams[last_word]:
+        sorted_words = sorted(bigrams[last_word].items(), key=lambda x: x[1], reverse=True)
         return [w for w, _ in sorted_words[:top_n]]
+    
+    # Fallback
     return ['the', 'and', 'to', 'of', 'for', 'with']
+
+# ============================================
+# FLASK ROUTES
+# ============================================
 
 @app.route('/')
 def index():
@@ -359,8 +583,9 @@ def index():
 def predict_route():
     try:
         data = request.get_json()
-        word = data.get('word', '')
-        suggestions = predict(word)
+        last_word = data.get('last_word', '')
+        second_last = data.get('second_last', '')
+        suggestions = predict_next(last_word, second_last)
         return jsonify({'suggestions': suggestions})
     except:
         return jsonify({'suggestions': ['the', 'and', 'to', 'of', 'for']})
@@ -369,24 +594,35 @@ def predict_route():
 def learn_route():
     try:
         data = request.get_json()
-        word = data.get('word', '')
+        word1 = data.get('word1', '')
+        word2 = data.get('word2', '')
         next_word = data.get('next_word', '')
-        if word and next_word:
-            learn_pair(word, next_word)
-            return jsonify({'status': 'learned'})
-        return jsonify({'status': 'error'})
+        
+        if word1 and word2 and next_word:
+            learn_trigram(word1, word2, next_word)
+        elif word1 and next_word:
+            learn_bigram(word1, next_word)
+        
+        return jsonify({'status': 'learned'})
     except:
         return jsonify({'status': 'error'})
 
+# ============================================
+# MAIN
+# ============================================
+
 if __name__ == '__main__':
-    print("=" * 60)
-    print("AI AUTO TEXT COMPLETION - MEGA DATASET (2000+ WORDS)")
-    print("=" * 60)
-    print(f"Total words loaded: {len(bigrams)}")
-    print("every -> day, night, time, one, person")
-    print("some -> one, people, time, day, thing")
-    print("any -> one, time, day, person, thing")
-    print("no -> one, time, way, problem, idea")
-    print("all -> the, my, your, his, her, of")
-    print("=" * 60)
+    print("=" * 65)
+    print("🤖 ULTIMATE SENTENCE AUTO-COMPLETION")
+    print("=" * 65)
+    print(f"✅ Total bigrams loaded: {len(bigrams)}")
+    print(f"✅ Total trigrams loaded: {len(trigrams)}")
+    print("")
+    print("📚 EXAMPLES:")
+    print("   'i am a good' → 'boy' (trigram 'a good')")
+    print("   'how are' → 'you' (trigram 'how are')")
+    print("   'what is' → 'your' (bigram 'is')")
+    print("   'every day' → 'i' (trigram 'every day')")
+    print("   'no one' → 'knows' (trigram 'no one')")
+    print("=" * 65)
     app.run(debug=True, host='127.0.0.1', port=5000)
