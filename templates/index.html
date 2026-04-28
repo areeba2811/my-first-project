@@ -1,131 +1,180 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>AI Text Auto-Completion</title>
+    <title>AI Auto Text Completion</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 50px;
-            margin: 0;
+            max-width: 650px;
+            margin: 50px auto;
+            text-align: center;
+            padding: 20px;
+            background: #f5f5f5;
         }
         .container {
-            max-width: 600px;
-            margin: auto;
             background: white;
             padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
         }
         h1 {
-            color: #667eea;
-            text-align: center;
+            color: #333;
         }
-        p {
-            text-align: center;
-            color: #666;
-        }
-        textarea {
-            width: 100%;
-            padding: 15px;
-            font-size: 16px;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            font-family: monospace;
-            box-sizing: border-box;
-        }
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
+        input {
+            width: 80%;
+            padding: 14px;
+            font-size: 18px;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            margin: 10px 0;
         }
         .suggestions {
-            background: #f5f5f5;
-            padding: 15px;
-            border-radius: 10px;
             margin-top: 20px;
+            min-height: 80px;
         }
-        .suggestion-title {
-            font-weight: bold;
-            color: #764ba2;
-            margin-bottom: 10px;
-        }
-        .suggestion-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .suggestion-list button {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+        button {
+            background: #007bff;
             color: white;
+            padding: 10px 20px;
+            margin: 5px;
             border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
+            border-radius: 5px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
         }
-        .suggestion-list button:hover {
-            transform: scale(1.05);
+        button:hover {
+            background: #0056b3;
+            transform: scale(1.02);
+        }
+        .loading {
+            color: gray;
+            font-style: italic;
+            padding: 20px;
+        }
+        .example {
+            margin-top: 25px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: left;
+        }
+        .example span {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            margin: 3px;
+            font-size: 12px;
+        }
+        .stats {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #666;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>✨ AI Text Auto-Completion</h1>
-    <p>Type karo - AI next word suggest karega</p>
+    <h1>🤖 AI Auto Text Completion</h1>
+    <p>Type ANY word - Get correct next word suggestions instantly</p>
     
-    <textarea id="textInput" rows="5" placeholder="Example: how are you"></textarea>
+    <input type="text" id="wordInput" placeholder="Type a word...">
     
-    <div class="suggestions">
-        <div class="suggestion-title">💡 Suggested Words:</div>
-        <div id="suggestionList" class="suggestion-list">
-            <span>Type karo predictions dekho...</span>
-        </div>
+    <div class="suggestions" id="suggestionsDiv">
+        <div class="loading">✨ Type a word to get suggestions...</div>
+    </div>
+
+    <div class="example">
+        <strong>📚 Examples (capital or small - both work):</strong><br>
+        <span>every</span> → day, night, time, one, person<br>
+        <span>some</span> → one, people, time, day, thing<br>
+        <span>any</span> → one, time, day, person, thing<br>
+        <span>no</span> → one, time, way, problem, idea<br>
+        <span>good</span> → morning, day, luck, job, idea<br>
+        <span>hello</span> → world, everyone, friends, dear<br>
+        <span>how</span> → are, is, to, do, about<br>
+        <span>what</span> → is, are, was, do, about<br>
+        <span>beautiful</span> → day, girl, house, car, smile<br>
+        <span>pakistan</span> → is, has, people, culture, cricket
+    </div>
+    
+    <div class="stats">
+        🧠 2000+ words pre-trained | AI Self Learning | Capital/Small both supported
     </div>
 </div>
 
 <script>
-    let typingTimer;
-    const textarea = document.getElementById('textInput');
+    const input = document.getElementById('wordInput');
+    const suggestionsDiv = document.getElementById('suggestionsDiv');
+    let timer;
     
-    textarea.addEventListener('input', function() {
-        clearTimeout(typingTimer);
-        typingTimer = setTimeout(function() {
-            const text = textarea.value;
-            if (text.trim() !== '') {
-                fetch('/predict', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({text: text})
-                })
-                .then(function(response) {
-                    return response.json();
-                })
-                .then(function(data) {
-                    const suggestionDiv = document.getElementById('suggestionList');
-                    if (data.suggestions && data.suggestions.length > 0) {
-                        let html = '';
-                        for (let i = 0; i < data.suggestions.length; i++) {
-                            html += '<button onclick="insertWord(\'' + data.suggestions[i] + '\')">' + data.suggestions[i] + '</button>';
-                        }
-                        suggestionDiv.innerHTML = html;
-                    } else {
-                        suggestionDiv.innerHTML = '<span>No suggestions</span>';
-                    }
-                });
-            }
-        }, 400);
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        const word = input.value.trim();
+        
+        if (word.length >= 2) {
+            suggestionsDiv.innerHTML = '<div class="loading">🤔 AI thinking...</div>';
+            timer = setTimeout(() => {
+                fetchSuggestions(word);
+            }, 300);
+        } else if (word.length === 0) {
+            suggestionsDiv.innerHTML = '<div class="loading">✨ Type a word to get suggestions...</div>';
+        } else {
+            suggestionsDiv.innerHTML = '<div class="loading">📝 Type at least 2 letters...</div>';
+        }
     });
     
-    function insertWord(word) {
-        textarea.value = textarea.value + ' ' + word + ' ';
-        textarea.focus();
-        const event = new Event('input');
-        textarea.dispatchEvent(event);
+    function fetchSuggestions(word) {
+        fetch('/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word: word })
+        })
+        .then(response => response.json())
+        .then(data => showSuggestions(data.suggestions))
+        .catch(error => {
+            console.error('Error:', error);
+            suggestionsDiv.innerHTML = '<div class="loading">⚠️ Server error! Make sure server is running.</div>';
+        });
     }
+    
+    function showSuggestions(suggestions) {
+        suggestionsDiv.innerHTML = '';
+        if (suggestions && suggestions.length > 0) {
+            suggestions.forEach(suggestion => {
+                const btn = document.createElement('button');
+                btn.textContent = suggestion;
+                btn.onclick = () => {
+                    const currentWord = input.value.trim();
+                    input.value = currentWord + ' ' + suggestion;
+                    suggestionsDiv.innerHTML = '<div class="loading">✨ AI learned this! Type another word...</div>';
+                    learnWordPair(currentWord, suggestion);
+                };
+                suggestionsDiv.appendChild(btn);
+            });
+        } else {
+            suggestionsDiv.innerHTML = '<div class="loading">😞 No suggestions. Try: hello, good, how, what, every, some</div>';
+        }
+    }
+    
+    function learnWordPair(word, nextWord) {
+        fetch('/learn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word: word, next_word: nextWord })
+        }).catch(e => console.log);
+    }
+    
+    input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            const firstBtn = document.querySelector('.suggestions button');
+            if (firstBtn) firstBtn.click();
+        }
+    });
+    
+    input.focus();
 </script>
 </body>
 </html>
